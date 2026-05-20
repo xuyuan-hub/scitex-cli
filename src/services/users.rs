@@ -1,5 +1,6 @@
-use crate::api_response::extract_object;
-use crate::client::{BiolabClient, BiolabError};
+use crate::api_response::{envelope_data, extract_object};
+use crate::client::BiolabClient;
+use crate::errors::BiolabError;
 use crate::types::User;
 
 impl BiolabClient {
@@ -18,9 +19,11 @@ impl BiolabClient {
         current: &str,
         new: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .patch("/users/me/password", &password_change_body(current, new))
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 }
 

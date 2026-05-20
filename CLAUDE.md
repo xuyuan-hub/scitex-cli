@@ -43,29 +43,45 @@ biolab orders list -f json
 ```
 Cargo.toml          # Rust project, binary: biolab, lib: biolab
 src/
-├── main.rs         # CLI entry — clap subcommand router
-├── lib.rs          # Public API re-exports
+├── main.rs         # Thin CLI entry — imports from lib crate, clap router
+├── lib.rs          # ALL mod declarations here; binary imports via biolab::...
 ├── config.rs       # Token management (env → file → OAuth), base URL
-├── client.rs       # HTTP client (reqwest), all API methods
-├── types.rs        # Serde request/response structs
+├── client.rs       # BiolabClient factory, re-exports BiolabError
+├── errors.rs       # BiolabError enum (thiserror)
+├── types.rs        # Serde request/response structs + custom deserializers
 ├── auth.rs         # Feishu OAuth login flow (tiny_http callback server)
 ├── output.rs       # Formatting: JSON (--format json) vs colored text
-└── commands/
-    ├── users.rs    # me / update-me / change-password
-    ├── orders.rs   # list / get / create-primer / create-sequencing / update / resend / download / template upload
-    ├── templates.rs# CRUD + default for order-info templates
-    ├── inventory.rs# list / get / stats / checkin / checkout / locations
-    └── lab.rs      # lab info / members / invite / join / approval rules
+├── http.rs         # Raw HTTP methods: get/post/patch/put/delete/upload/download
+├── api_response.rs # Response envelope unwrapping (data/items/results)
+├── commands/       # clap subcommand args + run() handlers
+│   ├── users.rs    # me / update-me / change-password
+│   ├── orders.rs   # list / get / create / update / resend / download / upload
+│   ├── templates.rs# CRUD + default for order-info templates
+│   ├── inventory.rs# list / get / stats / checkin / checkout / locations
+│   ├── lab.rs      # lab info / members / invite / join / approval rules
+│   └── skills.rs   # AI agent skill installation and check
+└── services/       # impl BiolabClient blocks, domain-specific API methods
+    ├── orders.rs   # Order API path builders + unit tests
+    ├── users.rs    # User API path builders + unit tests
+    ├── templates.rs# Template API path builders + unit tests
+    ├── inventory.rs# Stock/location API path builders + unit tests
+    ├── lab.rs      # Lab/member/approval API path builders + unit tests
+    └── helpers.rs  # Shared: empty_body(), single_field_body(), url_encode()
 ```
 
 ### Key Patterns
 
 - **Credential chain**: `BIOLAB_TOKEN` env var → `~/.biolab_token` file → interactive OAuth
 - **Token storage**: `~/.biolab_token`, valid 8 days
-- **HTTP client**: `BiolabClient` wraps reqwest with Bearer token injection, handles JSON responses with fallback to `data` envelope
+- **Module ownership**: All `mod` declarations live in `lib.rs`; `main.rs` imports from `biolab::...` (the library crate). This avoids the binary crate's `crate::` resolving differently from the library's `crate::`
+- **HTTP client**: `BiolabHttp` (in `http.rs`) wraps reqwest with Bearer token injection; `api_response.rs` provides `extract_array`/`extract_object`/`envelope_data` for response unwrapping
+- **Domain services**: `impl BiolabClient` blocks in `services/*.rs` call `self.http.get/post/...` then `extract_array`/`extract_object` — all methods unwrap the `{ "data": ... }` envelope consistently
+- **Shared helpers**: `services/helpers.rs` — `empty_body()`, `single_field_body()`, `url_encode()`
+- **Custom deserializers**: `string_or_f64` / `opt_string_or_f64` in `types.rs` — backend sometimes returns numeric fields as JSON strings
+- **Errors**: `BiolabError` in `src/errors.rs` (not `error.rs` — avoids collision with `std::error`)
 - **Output modes**: `-f json` for machine-readable, default text for human (colored status badges)
-- **Commands pattern**: Each `commands/*.rs` module defines clap subcommands + `run()` async function, called from `main.rs` dispatcher
 - **Agent skills**: `biolab skills install` copies the bundled `skills/biolab-api/SKILL.md` into `.claude/skills/biolab-api` and `.codex/skills/biolab-api`, then writes a version stamp for `biolab skills check`
+- **Tests**: `cargo test` must pass before every submission — CI gate enforces this (23 unit tests across api_response, services, types)
 
 ### API Base URL
 
@@ -98,9 +114,12 @@ Detailed API schemas are bundled in `skills/biolab-api/references/` and installe
 
 ## CI
 
-`.github/workflows/release.yml` builds for 5 targets on push:
-- Linux (x86_64 + arm64 via musl)
+`.github/workflows/release.yml` builds for 4 platforms on push:
+- Linux (x86_64 via musl)
 - Windows (x86_64)
-- macOS (x86_64 + arm64)
+- macOS (x86_64)
+- macOS (arm64)
+
+`cargo test` runs before build — all tests must pass.
 
 Tagged pushes (e.g. `v0.1.0`) auto-create GitHub Releases with binaries.

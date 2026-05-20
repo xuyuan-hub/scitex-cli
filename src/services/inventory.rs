@@ -1,5 +1,7 @@
 use crate::api_response::{extract_array, extract_object};
-use crate::client::{BiolabClient, BiolabError};
+use crate::client::BiolabClient;
+use crate::errors::BiolabError;
+use crate::services::url_encode;
 use crate::types::{Location, Stock, StockStats};
 
 impl BiolabClient {
@@ -130,10 +132,6 @@ fn create_location_body(name: &str, parent_id: Option<&str>) -> serde_json::Valu
         data["parent_id"] = serde_json::Value::String(pid.to_string());
     }
     data
-}
-
-fn url_encode(s: &str) -> String {
-    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
 }
 
 #[cfg(test)]

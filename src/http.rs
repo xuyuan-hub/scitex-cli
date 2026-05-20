@@ -4,8 +4,8 @@ use reqwest::Client;
 use serde::de::DeserializeOwned;
 
 use crate::api_response::parse_response;
-use crate::client::BiolabError;
 use crate::config::Config;
+use crate::errors::BiolabError;
 
 pub(crate) struct BiolabHttp {
     client: Client,

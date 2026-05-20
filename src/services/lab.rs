@@ -1,5 +1,7 @@
-use crate::api_response::{extract_array, extract_object};
-use crate::client::{BiolabClient, BiolabError};
+use crate::api_response::{envelope_data, extract_array, extract_object};
+use crate::client::BiolabClient;
+use crate::errors::BiolabError;
+use crate::services::{empty_body, single_field_body};
 use crate::types::{Application, ApprovalRule, Invitation, Lab, LabMember};
 
 impl BiolabClient {
@@ -9,7 +11,7 @@ impl BiolabClient {
     }
 
     pub async fn create_lab(&self, name: &str) -> Result<Lab, BiolabError> {
-        let resp: serde_json::Value = self.http.post("/lab/create", &name_body(name)).await?;
+        let resp: serde_json::Value = self.http.post("/lab/create", &single_field_body("name", name)).await?;
         extract_object(resp)
     }
 
@@ -28,13 +30,13 @@ impl BiolabClient {
         user_id: &str,
         role: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
-            .patch(&member_path(user_id), &role_body(role))
-            .await
+        let resp: serde_json::Value = self.http.patch(&member_path(user_id), &single_field_body("role", role)).await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn remove_member(&self, user_id: &str) -> Result<serde_json::Value, BiolabError> {
-        self.http.delete(&member_path(user_id)).await
+        let resp: serde_json::Value = self.http.delete(&member_path(user_id)).await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn invite_member(
@@ -42,9 +44,8 @@ impl BiolabClient {
         email: &str,
         role: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
-            .post("/lab/invite", &invite_body(email, role))
-            .await
+        let resp: serde_json::Value = self.http.post("/lab/invite", &invite_body(email, role)).await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn list_invitations(&self) -> Result<Vec<Invitation>, BiolabError> {
@@ -56,24 +57,28 @@ impl BiolabClient {
         &self,
         invitation_id: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(
                 &invitation_action_path(invitation_id, "accept"),
                 &empty_body(),
             )
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn decline_invitation(
         &self,
         invitation_id: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(
                 &invitation_action_path(invitation_id, "decline"),
                 &empty_body(),
             )
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn apply_to_join_lab(
@@ -81,9 +86,8 @@ impl BiolabClient {
         lab_id: &str,
         role: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
-            .post(&join_lab_path(lab_id), &role_body(role))
-            .await
+        let resp: serde_json::Value = self.http.post(&join_lab_path(lab_id), &single_field_body("role", role)).await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn list_applications(&self) -> Result<Vec<Application>, BiolabError> {
@@ -95,15 +99,19 @@ impl BiolabClient {
         &self,
         app_id: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(&application_action_path(app_id, "approve"), &empty_body())
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn reject_application(&self, app_id: &str) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(&application_action_path(app_id, "reject"), &empty_body())
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn list_approval_rules(&self) -> Result<Vec<ApprovalRule>, BiolabError> {
@@ -123,24 +131,13 @@ impl BiolabClient {
         &self,
         rule_id: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http.delete(&approval_rule_path(rule_id)).await
+        let resp: serde_json::Value = self.http.delete(&approval_rule_path(rule_id)).await?;
+        Ok(envelope_data(resp))
     }
-}
-
-fn name_body(name: &str) -> serde_json::Value {
-    serde_json::json!({ "name": name })
-}
-
-fn role_body(role: &str) -> serde_json::Value {
-    serde_json::json!({ "role": role })
 }
 
 fn invite_body(email: &str, role: &str) -> serde_json::Value {
     serde_json::json!({ "email": email, "role": role })
-}
-
-fn empty_body() -> serde_json::Value {
-    serde_json::json!({})
 }
 
 fn member_path(user_id: &str) -> String {
@@ -169,8 +166,14 @@ mod tests {
 
     #[test]
     fn builds_lab_bodies() {
-        assert_eq!(name_body("BioLab"), serde_json::json!({ "name": "BioLab" }));
-        assert_eq!(role_body("admin"), serde_json::json!({ "role": "admin" }));
+        assert_eq!(
+            single_field_body("name", "BioLab"),
+            serde_json::json!({ "name": "BioLab" })
+        );
+        assert_eq!(
+            single_field_body("role", "admin"),
+            serde_json::json!({ "role": "admin" })
+        );
         assert_eq!(
             invite_body("pi@example.com", "member"),
             serde_json::json!({ "email": "pi@example.com", "role": "member" })

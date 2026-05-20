@@ -1,21 +1,11 @@
 use std::sync::Arc;
 
+use biolab::commands::{inventory, lab, orders, skills, templates, users};
+use biolab::config::Config;
+use biolab::output::OutputFormat;
+use biolab::{check_status, login, logout};
 use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
-
-mod api_response;
-mod auth;
-mod client;
-mod commands;
-mod config;
-mod http;
-mod output;
-mod services;
-mod types;
-
-use commands::{inventory, lab, orders, skills, templates, users};
-use config::Config;
-use output::OutputFormat;
 
 /// Biolab CLI — 实验管理系统客户端
 #[derive(Parser)]
@@ -85,15 +75,15 @@ async fn main() {
             return;
         }
         Some(Commands::Login) => {
-            auth::login(&config);
+            login(&config);
             Ok(())
         }
         Some(Commands::Logout) => {
-            auth::logout(&config);
+            logout(&config);
             Ok(())
         }
         Some(Commands::Status) => {
-            let logged_in = auth::check_status(&config);
+            let logged_in = check_status(&config);
             if !logged_in {
                 std::process::exit(1);
             }

@@ -1,5 +1,6 @@
-use crate::api_response::{extract_array, extract_object};
-use crate::client::{BiolabClient, BiolabError};
+use crate::api_response::{envelope_data, extract_array, extract_object};
+use crate::client::BiolabClient;
+use crate::errors::BiolabError;
 use crate::types::{CreatePrimerOrder, CreateSequencingOrder, Order};
 
 impl BiolabClient {
@@ -39,9 +40,11 @@ impl BiolabClient {
     }
 
     pub async fn resend_order(&self, order_id: &str) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(&resend_order_path(order_id), &serde_json::json!({}))
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn download_order(&self, order_id: &str) -> Result<Vec<u8>, BiolabError> {
@@ -64,18 +67,22 @@ impl BiolabClient {
         &self,
         file_path: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .upload_file("/orders/primer/upload-excel", file_path)
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn upload_sequencing_excel(
         &self,
         file_path: &str,
     ) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .upload_file("/orders/sequencing/upload-excel", file_path)
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 }
 

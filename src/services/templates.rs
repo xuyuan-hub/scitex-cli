@@ -1,5 +1,7 @@
-use crate::api_response::{extract_array, extract_object};
-use crate::client::{BiolabClient, BiolabError};
+use crate::api_response::{envelope_data, extract_array, extract_object};
+use crate::client::BiolabClient;
+use crate::errors::BiolabError;
+use crate::services::url_encode;
 use crate::types::Template;
 
 impl BiolabClient {
@@ -36,13 +38,16 @@ impl BiolabClient {
     }
 
     pub async fn delete_template(&self, id: &str) -> Result<serde_json::Value, BiolabError> {
-        self.http.delete(&template_path(id)).await
+        let resp: serde_json::Value = self.http.delete(&template_path(id)).await?;
+        Ok(envelope_data(resp))
     }
 
     pub async fn set_default_template(&self, id: &str) -> Result<serde_json::Value, BiolabError> {
-        self.http
+        let resp: serde_json::Value = self
+            .http
             .post(&set_default_template_path(id), &serde_json::json!({}))
-            .await
+            .await?;
+        Ok(envelope_data(resp))
     }
 }
 
@@ -63,10 +68,6 @@ fn default_template_path(order_type: Option<&str>) -> String {
 
 fn set_default_template_path(id: &str) -> String {
     format!("/order-info-templates/{id}/set-default")
-}
-
-fn url_encode(s: &str) -> String {
-    url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
 }
 
 #[cfg(test)]

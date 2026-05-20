@@ -1,6 +1,6 @@
 use serde::de::DeserializeOwned;
 
-use crate::client::BiolabError;
+use crate::errors::BiolabError;
 
 pub(crate) async fn parse_response<T: DeserializeOwned>(
     resp: reqwest::Response,
@@ -46,7 +46,7 @@ pub(crate) fn extract_object<T: DeserializeOwned>(
     serde_json::from_value(envelope_data(resp)).map_err(|e| BiolabError::ParseError(e.to_string()))
 }
 
-fn envelope_data(resp: serde_json::Value) -> serde_json::Value {
+pub(crate) fn envelope_data(resp: serde_json::Value) -> serde_json::Value {
     resp.get("data").cloned().unwrap_or(resp)
 }
 
