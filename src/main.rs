@@ -8,7 +8,9 @@ mod auth;
 mod client;
 mod commands;
 mod config;
+mod http;
 mod output;
+mod services;
 mod types;
 
 use commands::{inventory, lab, orders, skills, templates, users};

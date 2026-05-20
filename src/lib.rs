@@ -2,7 +2,9 @@ mod api_response;
 pub mod auth;
 pub mod client;
 pub mod config;
+mod http;
 pub mod output;
+mod services;
 /// Biolab API client library.
 pub mod types;
 
