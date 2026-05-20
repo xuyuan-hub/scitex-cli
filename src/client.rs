@@ -129,11 +129,13 @@ impl BiolabClient {
     // ---- users ----
 
     pub async fn get_me(&self) -> Result<User, BiolabError> {
-        self.get("/users/me").await
+        let resp: serde_json::Value = self.get("/users/me").await?;
+        extract_object(resp)
     }
 
     pub async fn update_me(&self, data: &serde_json::Value) -> Result<User, BiolabError> {
-        self.patch("/users/me", data).await
+        let resp: serde_json::Value = self.patch("/users/me", data).await?;
+        extract_object(resp)
     }
 
     pub async fn change_password(&self, current: &str, new: &str) -> Result<serde_json::Value, BiolabError> {
@@ -151,19 +153,23 @@ impl BiolabClient {
     }
 
     pub async fn get_order(&self, order_id: &str) -> Result<Order, BiolabError> {
-        self.get(&format!("/orders/{order_id}")).await
+        let resp: serde_json::Value = self.get(&format!("/orders/{order_id}")).await?;
+        extract_object(resp)
     }
 
     pub async fn create_primer_order(&self, order: &CreatePrimerOrder) -> Result<Order, BiolabError> {
-        self.post("/orders/primer", order).await
+        let resp: serde_json::Value = self.post("/orders/primer", order).await?;
+        extract_object(resp)
     }
 
     pub async fn create_sequencing_order(&self, order: &CreateSequencingOrder) -> Result<Order, BiolabError> {
-        self.post("/orders/sequencing", order).await
+        let resp: serde_json::Value = self.post("/orders/sequencing", order).await?;
+        extract_object(resp)
     }
 
     pub async fn update_order(&self, order_id: &str, data: &serde_json::Value) -> Result<Order, BiolabError> {
-        self.patch(&format!("/orders/{order_id}"), data).await
+        let resp: serde_json::Value = self.patch(&format!("/orders/{order_id}"), data).await?;
+        extract_object(resp)
     }
 
     pub async fn resend_order(&self, order_id: &str) -> Result<serde_json::Value, BiolabError> {
@@ -227,7 +233,8 @@ impl BiolabClient {
     }
 
     pub async fn get_template(&self, id: &str) -> Result<Template, BiolabError> {
-        self.get(&format!("/order-info-templates/{id}")).await
+        let resp: serde_json::Value = self.get(&format!("/order-info-templates/{id}")).await?;
+        extract_object(resp)
     }
 
     pub async fn get_default_template(&self, order_type: Option<&str>) -> Result<Template, BiolabError> {
@@ -236,15 +243,18 @@ impl BiolabClient {
         } else {
             "/order-info-templates/default".to_string()
         };
-        self.get(&qs).await
+        let resp: serde_json::Value = self.get(&qs).await?;
+        extract_object(resp)
     }
 
     pub async fn create_template(&self, data: &serde_json::Value) -> Result<Template, BiolabError> {
-        self.post("/order-info-templates/", data).await
+        let resp: serde_json::Value = self.post("/order-info-templates/", data).await?;
+        extract_object(resp)
     }
 
     pub async fn update_template(&self, id: &str, data: &serde_json::Value) -> Result<Template, BiolabError> {
-        self.put(&format!("/order-info-templates/{id}"), data).await
+        let resp: serde_json::Value = self.put(&format!("/order-info-templates/{id}"), data).await?;
+        extract_object(resp)
     }
 
     pub async fn delete_template(&self, id: &str) -> Result<serde_json::Value, BiolabError> {
@@ -283,11 +293,13 @@ impl BiolabClient {
     }
 
     pub async fn get_stock(&self, stock_id: &str) -> Result<Stock, BiolabError> {
-        self.get(&format!("/inventory/stocks/{stock_id}")).await
+        let resp: serde_json::Value = self.get(&format!("/inventory/stocks/{stock_id}")).await?;
+        extract_object(resp)
     }
 
     pub async fn get_stock_stats(&self) -> Result<StockStats, BiolabError> {
-        self.get("/inventory/stats").await
+        let resp: serde_json::Value = self.get("/inventory/stats").await?;
+        extract_object(resp)
     }
 
     pub async fn checkin(
@@ -296,10 +308,11 @@ impl BiolabClient {
         quantity: f64,
         purpose: &str,
     ) -> Result<Stock, BiolabError> {
-        self.post(&format!("/inventory/stocks/{stock_id}/checkin"), &serde_json::json!({
+        let resp: serde_json::Value = self.post(&format!("/inventory/stocks/{stock_id}/checkin"), &serde_json::json!({
             "quantity": quantity,
             "purpose": purpose,
-        })).await
+        })).await?;
+        extract_object(resp)
     }
 
     pub async fn checkout(
@@ -309,11 +322,12 @@ impl BiolabClient {
         purpose: &str,
         experiment_ref: &str,
     ) -> Result<Stock, BiolabError> {
-        self.post(&format!("/inventory/stocks/{stock_id}/checkout"), &serde_json::json!({
+        let resp: serde_json::Value = self.post(&format!("/inventory/stocks/{stock_id}/checkout"), &serde_json::json!({
             "quantity": quantity,
             "purpose": purpose,
             "experiment_ref": experiment_ref,
-        })).await
+        })).await?;
+        extract_object(resp)
     }
 
     pub async fn list_locations(&self) -> Result<Vec<Location>, BiolabError> {
@@ -326,21 +340,25 @@ impl BiolabClient {
         if let Some(pid) = parent_id {
             data["parent_id"] = serde_json::Value::String(pid.to_string());
         }
-        self.post("/inventory/locations", &data).await
+        let resp: serde_json::Value = self.post("/inventory/locations", &data).await?;
+        extract_object(resp)
     }
 
     // ---- lab ----
 
     pub async fn get_lab(&self) -> Result<Lab, BiolabError> {
-        self.get("/lab").await
+        let resp: serde_json::Value = self.get("/lab").await?;
+        extract_object(resp)
     }
 
     pub async fn create_lab(&self, name: &str) -> Result<Lab, BiolabError> {
-        self.post("/lab/create", &serde_json::json!({ "name": name })).await
+        let resp: serde_json::Value = self.post("/lab/create", &serde_json::json!({ "name": name })).await?;
+        extract_object(resp)
     }
 
     pub async fn update_lab(&self, data: &serde_json::Value) -> Result<Lab, BiolabError> {
-        self.patch("/lab", data).await
+        let resp: serde_json::Value = self.patch("/lab", data).await?;
+        extract_object(resp)
     }
 
     pub async fn list_lab_members(&self) -> Result<Vec<LabMember>, BiolabError> {
@@ -396,7 +414,8 @@ impl BiolabClient {
     }
 
     pub async fn add_approval_rule(&self, data: &serde_json::Value) -> Result<ApprovalRule, BiolabError> {
-        self.post("/lab/approval-rules", data).await
+        let resp: serde_json::Value = self.post("/lab/approval-rules", data).await?;
+        extract_object(resp)
     }
 
     pub async fn remove_approval_rule(&self, rule_id: &str) -> Result<serde_json::Value, BiolabError> {
@@ -431,6 +450,14 @@ fn extract_array<T: serde::de::DeserializeOwned>(resp: serde_json::Value) -> Res
         }
     } else {
         Ok(vec![])
+    }
+}
+
+fn extract_object<T: serde::de::DeserializeOwned>(resp: serde_json::Value) -> Result<T, BiolabError> {
+    if let Some(data) = resp.get("data") {
+        serde_json::from_value(data.clone()).map_err(|e| BiolabError::ParseError(e.to_string()))
+    } else {
+        serde_json::from_value(resp).map_err(|e| BiolabError::ParseError(e.to_string()))
     }
 }
 
