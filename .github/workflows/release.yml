@@ -18,19 +18,19 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             binary_name: biolab
-            asset_name: biolab-linux-amd64
+            asset_name: biolab_unix
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: biolab.exe
-            asset_name: biolab-windows-amd64.exe
+            asset_name: biolab_win
           - os: macos-latest
             target: x86_64-apple-darwin
             binary_name: biolab
-            asset_name: biolab-macos-amd64
+            asset_name: biolab_mac_amd64
           - os: macos-latest
             target: aarch64-apple-darwin
             binary_name: biolab
-            asset_name: biolab-macos-arm64
+            asset_name: biolab_mac_arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -52,11 +52,15 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Rename binary
+        run: |
+          mv target/${{ matrix.target }}/release/${{ matrix.binary_name }} ${{ matrix.asset_name }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+          path: ${{ matrix.asset_name }}
 
   release:
     needs: build
