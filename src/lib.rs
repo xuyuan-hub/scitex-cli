@@ -10,7 +10,7 @@ pub mod services;
 /// Biolab API client library.
 pub mod types;
 
-pub use auth::{check_status, login, logout};
+pub use auth::{check_status, login, logout, poll_login_from_env, LoginMode};
 pub use client::BiolabClient;
 pub use config::Config;
 pub use errors::BiolabError;

@@ -1,9 +1,14 @@
-use std::time::Duration;
+use std::{
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 use reqwest::Client;
 use serde::Deserialize;
 
 use crate::config::Config;
+
+const LOGIN_POLL_KEY_ENV_VAR: &str = "BIOLAB_LOGIN_POLL_KEY";
 
 /// Response from POST /feishu/cli-auth.
 #[derive(Deserialize)]
@@ -44,7 +49,13 @@ pub fn check_status(config: &Config) -> bool {
     }
 }
 
-pub async fn login(config: &Config) -> bool {
+#[derive(Debug, Clone, Copy)]
+pub enum LoginMode {
+    Wait,
+    Background,
+}
+
+pub async fn login(config: &Config, mode: LoginMode) -> bool {
     if config.load_token().is_some() {
         println!("已有 token，尝试验证...");
         if check_status(config) {
@@ -66,22 +77,35 @@ pub async fn login(config: &Config) -> bool {
             println!("\n{}", "=".repeat(55));
             println!("  请在浏览器中打开以下链接完成飞书认证：");
             println!("\n    {}\n", resp.auth_url);
-            println!("  等待认证完成，每 2 秒检查一次…");
-            println!("{}\n", "=".repeat(55));
 
-            // Step 2: Poll for JWT
-            match poll_jwt(&client, config, &resp.poll_key).await {
-                Ok(token) => {
-                    if let Err(e) = config.save_token(&token) {
-                        eprintln!("保存 token 失败: {e}");
+            match mode {
+                LoginMode::Wait => {
+                    println!("  等待认证完成，每 2 秒检查一次…");
+                    println!("{}\n", "=".repeat(55));
+
+                    // Step 2: Poll for JWT
+                    match poll_and_save_token(&client, config, &resp.poll_key).await {
+                        Ok(()) => {
+                            println!("认证成功！Token 已保存到系统凭据库");
+                            check_status(config)
+                        }
+                        Err(e) => {
+                            eprintln!("认证失败: {e}");
+                            false
+                        }
+                    }
+                }
+                LoginMode::Background => {
+                    println!("  已启动后台登录轮询，Agent 可先返回认证链接。");
+                    println!("  用户授权后 token 会自动保存；稍后运行 `biolab status` 检查结果。");
+                    println!("{}\n", "=".repeat(55));
+
+                    if let Err(e) = spawn_login_poller(&resp.poll_key) {
+                        eprintln!("启动后台登录轮询失败: {e}");
                         return false;
                     }
-                    println!("认证成功！Token 已保存到系统凭据库");
-                    check_status(config)
-                }
-                Err(e) => {
-                    eprintln!("认证失败: {e}");
-                    false
+
+                    true
                 }
             }
         }
@@ -90,6 +114,25 @@ pub async fn login(config: &Config) -> bool {
             false
         }
     }
+}
+
+pub async fn poll_login_from_env(config: &Config) -> bool {
+    let Ok(poll_key) = std::env::var(LOGIN_POLL_KEY_ENV_VAR) else {
+        eprintln!("缺少后台登录 poll key。");
+        return false;
+    };
+
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .expect("failed to build HTTP client");
+
+    if let Err(e) = poll_and_save_token(&client, config, &poll_key).await {
+        eprintln!("后台登录失败: {e}");
+        return false;
+    }
+
+    true
 }
 
 /// Request an auth URL and poll key from the backend.
@@ -113,6 +156,16 @@ async fn request_cli_auth(
 
     let data: CliAuthResponse = resp.json().await?;
     Ok(data)
+}
+
+async fn poll_and_save_token(
+    client: &Client,
+    config: &Config,
+    poll_key: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let token = poll_jwt(client, config, poll_key).await?;
+    config.save_token(&token)?;
+    Ok(())
 }
 
 /// Poll the token endpoint until the user authorizes or we time out.
@@ -164,6 +217,18 @@ async fn poll_jwt(
         let _ = std::io::stdout().flush();
         continue;
     }
+}
+
+fn spawn_login_poller(poll_key: &str) -> std::io::Result<()> {
+    let exe = std::env::current_exe()?;
+    Command::new(exe)
+        .arg("login-poll")
+        .env(LOGIN_POLL_KEY_ENV_VAR, poll_key)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    Ok(())
 }
 
 pub fn logout(config: &Config) {

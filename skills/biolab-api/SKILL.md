@@ -23,11 +23,11 @@ biolab --help
 Authenticate with Feishu OAuth before making API calls:
 
 ```bash
-biolab login
+biolab login --background
 biolab status
 ```
 
-The access token is loaded from `BIOLAB_TOKEN` first, then from the OS keychain. Legacy `~/.biolab_token` files are migrated into the keychain when possible; plaintext token files require explicit `BIOLAB_INSECURE_TOKEN_FILE=1`.
+The access token is loaded from `BIOLAB_TOKEN` first, then from the OS keychain. In Docker/K8s containers, if keyring is unavailable, the CLI automatically uses a container-local token file so Agent login does not require restarting the container or mounting a secret. Legacy `~/.biolab_token` files are migrated into the keychain when possible on non-container hosts; host plaintext token files require explicit `BIOLAB_INSECURE_TOKEN_FILE=1`.
 The API base URL defaults to `http://8.136.56.203/api/v1` and can be overridden with `BIOLAB_BASE_URL`.
 
 ## Agent Rules
@@ -35,7 +35,7 @@ The API base URL defaults to `http://8.136.56.203/api/v1` and can be overridden 
 - Prefer `-f json` when the next step needs machine parsing.
 - Do not print tokens or secrets.
 - For write operations, confirm the user's intent first when the request is destructive or changes shared lab state.
-- If a command fails because login is missing or expired, run `biolab login` and ask the user to complete the browser flow.
+- If a command fails because login is missing or expired, run `biolab login --background`, send the printed auth URL to the user, and check `biolab status` after the user completes the browser flow.
 - Use command help before guessing flags: `biolab <domain> --help`.
 - Before complex domain work, read the matching reference file:
   - Orders: `references/orders.md`

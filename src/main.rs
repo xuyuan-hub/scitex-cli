@@ -3,8 +3,8 @@ use std::sync::Arc;
 use biolab::commands::{inventory, lab, orders, skills, templates, users};
 use biolab::config::Config;
 use biolab::output::OutputFormat;
-use biolab::{check_status, login, logout};
-use clap::{Parser, Subcommand, ValueEnum};
+use biolab::{check_status, login, logout, poll_login_from_env, LoginMode};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 
 /// Biolab CLI — 实验管理系统客户端
@@ -37,7 +37,10 @@ impl From<&OutputFormatArg> for OutputFormat {
 #[derive(Subcommand)]
 enum Commands {
     /// 飞书 OAuth 登录
-    Login,
+    Login(LoginArgs),
+    /// 后台完成登录轮询（内部命令）
+    #[command(hide = true)]
+    LoginPoll,
     /// 登出（删除本地 token）
     Logout,
     /// 检查登录状态
@@ -62,6 +65,13 @@ enum Commands {
     Skills(skills::SkillsArgs),
 }
 
+#[derive(Args)]
+struct LoginArgs {
+    /// 后台等待用户授权，适合 AI Agent 使用
+    #[arg(long, alias = "no-wait")]
+    background: bool,
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -74,8 +84,19 @@ async fn main() {
             println!("\n使用 biolab --help 查看可用命令\n");
             return;
         }
-        Some(Commands::Login) => {
-            login(&config).await;
+        Some(Commands::Login(args)) => {
+            let mode = if args.background {
+                LoginMode::Background
+            } else {
+                LoginMode::Wait
+            };
+            login(&config, mode).await;
+            Ok(())
+        }
+        Some(Commands::LoginPoll) => {
+            if !poll_login_from_env(&config).await {
+                std::process::exit(1);
+            }
             Ok(())
         }
         Some(Commands::Logout) => {

@@ -8,6 +8,7 @@
 
 - Node.js（npm/npx，仅安装 Agent Skills 时需要）
 - 系统凭据库可用：Windows Credential Manager、macOS Keychain，或 Linux Secret Service/keyutils
+- 如果运行在 Docker/K8s 等容器中，CLI 会在 keyring 不可用时自动使用容器内本地 token 文件，无需重启容器或额外挂载
 - Rust 1.70+（仅源码构建需要）
 
 ## 第 1 步 安装 CLI
@@ -76,12 +77,12 @@ npx -y skills add xuyuan-hub/biolab-cli -y -g
 Agent 运行以下命令，并提取终端输出中的认证链接发给用户。
 
 ```shell
-biolab login
+biolab login --background
 ```
 
-用户在浏览器中打开认证链接并完成飞书授权后，CLI 会自动轮询后端并保存 token。
+用户在浏览器中打开认证链接并完成飞书授权后，后台轮询进程会自动保存 token。Agent 不需要占住终端等待授权完成。
 
-默认情况下，token 会保存到系统凭据库中。不要打印、复制或记录 token。
+默认情况下，token 会保存到系统凭据库中。若 Agent 运行在 headless Docker/K8s 容器里，系统凭据库通常不可用，CLI 会自动回退到容器内本地 token 文件。不要打印、复制或记录 token。
 
 ## 第 4 步 验证
 
@@ -116,24 +117,26 @@ biolab lab info -f json
 | 配置项 | 默认值 | 覆盖方式 |
 |--------|--------|----------|
 | API 地址 | `http://8.136.56.203/api/v1` | `BIOLAB_BASE_URL` |
-| Token | 系统凭据库 | `BIOLAB_TOKEN` |
-| 明文 token 文件回退 | 默认关闭 | `BIOLAB_INSECURE_TOKEN_FILE=1` |
+| Token | 系统凭据库；容器内自动 fallback 到本地 token 文件 | `BIOLAB_TOKEN` |
+| 宿主机明文 token 文件回退 | 默认关闭 | `BIOLAB_INSECURE_TOKEN_FILE=1` |
+| 禁用容器 token 文件 fallback | 默认关闭 | `BIOLAB_DISABLE_CONTAINER_TOKEN_FILE=1` |
 
-`BIOLAB_INSECURE_TOKEN_FILE=1` 只应在可信 headless 环境中临时使用。常规本地环境应使用系统凭据库。
+容器内 fallback 不需要重启容器或挂载 secret，适合正在运行的 Agent 容器。token 只保存在当前容器文件系统中；容器删除后需要重新登录。`BIOLAB_INSECURE_TOKEN_FILE=1` 只应在可信 headless 宿主机环境中临时使用。常规本地环境应使用系统凭据库。
 
 ## 故障处理
 
 如果 `biolab login` 提示系统凭据库存储失败：
 
 1. 确认系统凭据库可用。
-2. 在 Linux headless 环境中配置 Secret Service/keyutils，或使用受控的临时环境变量。
-3. 不要手动把 token 写入共享目录、项目目录或日志文件。
+2. 如果 Agent 在 Docker/K8s 容器中，直接使用 `biolab login --background`；CLI 会自动使用容器内 token 文件。
+3. 在非容器 Linux headless 环境中配置 Secret Service/keyutils，或使用受控的临时环境变量。
+4. 不要手动把 token 写入共享目录、项目目录或日志文件。
 
 如果命令返回未登录或 token 失效：
 
 ```shell
 biolab logout
-biolab login
+biolab login --background
 biolab status
 ```
 

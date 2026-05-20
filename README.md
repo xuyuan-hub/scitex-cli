@@ -98,10 +98,10 @@ If not logged in, proceed to Step 2.
 
 **Step 2 — Login**
 
-> Run `biolab login`. It outputs an auth URL. Send the URL to the user to open in their browser. After the user authorizes, the CLI automatically polls the token endpoint and saves the token.
+> Run `biolab login --background`. It outputs an auth URL, starts a background poller, and returns immediately. Send the URL to the user to open in their browser. After the user authorizes, the background poller saves the token.
 
 ```bash
-biolab login
+biolab login --background
 ```
 
 **Step 3 — Install Agent Skills (required for automated workflows)**
@@ -157,6 +157,9 @@ When asked to create an order, the Agent follows this sequence:
 # Interactive login
 biolab login
 
+# Agent-friendly login: print auth URL and continue polling in background
+biolab login --background
+
 # Check status
 biolab status
 
@@ -164,7 +167,7 @@ biolab status
 biolab logout
 ```
 
-Token is stored in the OS keychain by default and is valid for 8 days. `BIOLAB_TOKEN` can override it for CI or temporary sessions. Legacy `~/.biolab_token` files are migrated into the keychain when possible; plaintext file storage is disabled unless `BIOLAB_INSECURE_TOKEN_FILE=1` is explicitly set in a trusted headless environment.
+Token is stored in the OS keychain by default and is valid for 8 days. In Docker/K8s containers, if keyring is unavailable, the CLI automatically uses a container-local token file so Agent login does not require restarting the container or mounting a secret. `BIOLAB_TOKEN` can override storage for CI or temporary sessions. Legacy `~/.biolab_token` files are migrated into the keychain when possible on non-container hosts; host plaintext file storage is disabled unless `BIOLAB_INSECURE_TOKEN_FILE=1` is explicitly set in a trusted headless environment.
 
 ## Command System
 
@@ -306,7 +309,7 @@ Please fully understand all usage risks. By using this tool, you are deemed to v
 | Setting | Default | Override |
 |---------|---------|----------|
 | API Base URL | `http://8.136.56.203/api/v1` | `BIOLAB_BASE_URL` env var |
-| Token | OS keychain | `BIOLAB_TOKEN` env var; legacy `~/.biolab_token` migration; `BIOLAB_INSECURE_TOKEN_FILE=1` for explicit plaintext fallback |
+| Token | OS keychain; container-local file fallback in Docker/K8s | `BIOLAB_TOKEN` env var; legacy `~/.biolab_token` migration; `BIOLAB_INSECURE_TOKEN_FILE=1` for explicit host plaintext fallback |
 
 ## Architecture
 
@@ -453,10 +456,10 @@ biolab status
 
 **第二步 —— 登录**
 
-> 运行 `biolab login`，会打印一个认证 URL。将 URL 发给用户在浏览器中打开，授权后 CLI 自动轮询获取 token 并保存。无论本地或远程终端均可正常工作。
+> 运行 `biolab login --background`，会打印一个认证 URL、启动后台轮询进程并立即返回。将 URL 发给用户在浏览器中打开，授权后后台进程会自动保存 token。无论本地或远程终端均可正常工作。
 
 ```bash
-biolab login
+biolab login --background
 ```
 
 **第三步 —— 安装 Agent Skills（自动化工作流必需）**
@@ -519,6 +522,9 @@ Agent skill 参考文档位于 `.claude/skills/biolab-api/references/`。
 # 交互式登录
 biolab login
 
+# Agent 友好登录：打印认证 URL 后在后台等待用户授权
+biolab login --background
+
 # 检查状态
 biolab status
 
@@ -526,7 +532,7 @@ biolab status
 biolab logout
 ```
 
-Token 默认存储在 OS 密钥链中，有效期 8 天。可通过 `BIOLAB_TOKEN` 环境变量覆盖。遗留 `~/.biolab_token` 文件会尽量迁移到密钥链；明文文件存储默认关闭，只有在可信 headless 环境中显式设置 `BIOLAB_INSECURE_TOKEN_FILE=1` 才会启用。
+Token 默认存储在 OS 密钥链中，有效期 8 天。在 Docker/K8s 容器中，如果 keyring 不可用，CLI 会自动使用容器内本地 token 文件，Agent 登录无需重启容器或挂载 secret。可通过 `BIOLAB_TOKEN` 环境变量覆盖。非容器宿主机上的遗留 `~/.biolab_token` 文件会尽量迁移到密钥链；宿主机明文文件存储默认关闭，只有在可信 headless 环境中显式设置 `BIOLAB_INSECURE_TOKEN_FILE=1` 才会启用。
 
 ## 命令系统
 
@@ -668,7 +674,7 @@ biolab inventory stats -f json
 | 配置项 | 默认值 | 环境变量覆盖 |
 |--------|--------|-------------|
 | API 地址 | `http://8.136.56.203/api/v1` | `BIOLAB_BASE_URL` |
-| Token | OS 密钥链 | `BIOLAB_TOKEN`；遗留 `~/.biolab_token` 迁移；显式 `BIOLAB_INSECURE_TOKEN_FILE=1` 明文回退 |
+| Token | OS 密钥链；Docker/K8s 容器内本地文件 fallback | `BIOLAB_TOKEN`；遗留 `~/.biolab_token` 迁移；显式 `BIOLAB_INSECURE_TOKEN_FILE=1` 宿主机明文回退 |
 
 ## 架构
 
