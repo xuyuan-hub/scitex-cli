@@ -49,14 +49,14 @@ Before you start, make sure you have:
 | Linux | `biolab_unix` |
 | macOS (x86_64) | `biolab_mac_amd64` |
 | macOS (arm64) | `biolab_mac_arm64` |
-| Windows | `biolab_win.exe` |
+| Windows | `biolab_win.zip` |
 
 ```bash
 # Linux / macOS
 chmod +x biolab_unix && sudo mv biolab_unix /usr/local/bin/biolab
 
 # Windows
-# Rename biolab_win.exe to biolab.exe and place in PATH
+# Extract biolab_win.zip, rename biolab_win.exe to biolab.exe, and place it in PATH
 ```
 
 **Option 2 — Build from source:**
@@ -407,14 +407,14 @@ This project is licensed under the **MIT License**.
 | Linux | `biolab_unix` |
 | macOS (x86_64) | `biolab_mac_amd64` |
 | macOS (arm64) | `biolab_mac_arm64` |
-| Windows | `biolab_win.exe` |
+| Windows | `biolab_win.zip` |
 
 ```bash
 # Linux / macOS
 chmod +x biolab_unix && sudo mv biolab_unix /usr/local/bin/biolab
 
 # Windows
-# 将 biolab_win.exe 重命名为 biolab.exe 并放入 PATH
+# 解压 biolab_win.zip，将 biolab_win.exe 重命名为 biolab.exe 并放入 PATH
 ```
 
 **方式二 —— 从源码编译：**

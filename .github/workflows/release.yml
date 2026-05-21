@@ -19,18 +19,22 @@ jobs:
             target: x86_64-unknown-linux-musl
             binary_name: biolab
             asset_name: biolab_unix
+            upload_name: biolab_unix
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: biolab.exe
             asset_name: biolab_win.exe
+            upload_name: biolab_win.zip
           - os: macos-latest
             target: x86_64-apple-darwin
             binary_name: biolab
             asset_name: biolab_mac_amd64
+            upload_name: biolab_mac_amd64
           - os: macos-latest
             target: aarch64-apple-darwin
             binary_name: biolab
             asset_name: biolab_mac_arm64
+            upload_name: biolab_mac_arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -59,11 +63,25 @@ jobs:
         run: |
           mv target/${{ matrix.target }}/release/${{ matrix.binary_name }} ${{ matrix.asset_name }}
 
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.upload_name }} -Force
+          $hash = (Get-FileHash ${{ matrix.upload_name }} -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.upload_name }}" | Out-File -Encoding ascii "${{ matrix.upload_name }}.sha256"
+
+      - name: Generate checksum
+        if: runner.os != 'Windows'
+        run: shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
-          path: ${{ matrix.asset_name }}
+          name: ${{ matrix.upload_name }}
+          path: |
+            ${{ matrix.upload_name }}
+            ${{ matrix.upload_name }}.sha256
 
   release:
     needs: build

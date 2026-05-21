@@ -22,7 +22,7 @@ https://github.com/xuyuan-hub/biolab-cli/releases/latest
 | 平台 | Release 资产 |
 |------|--------------|
 | Linux | `biolab_unix` |
-| Windows | `biolab_win.exe` |
+| Windows | `biolab_win.zip` |
 | macOS x86_64 | `biolab_mac_amd64` |
 | macOS arm64 | `biolab_mac_arm64` |
 
@@ -37,7 +37,7 @@ biolab --help
 Windows PowerShell：
 
 ```powershell
-# 将 biolab_win.exe 重命名为 biolab.exe，并放入 PATH 中的目录
+# 解压 biolab_win.zip，将 biolab_win.exe 重命名为 biolab.exe，并放入 PATH 中的目录
 biolab --help
 ```
 
