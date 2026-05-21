@@ -37,6 +37,7 @@ The access token is loaded from `BIOLAB_TOKEN` first, then from the OS keychain.
 - If a command fails because login is missing or expired, run `biolab login --background`, send the printed auth URL to the user, and check `biolab status` after the user completes the browser flow.
 - Use `biolab update check` to check whether the installed CLI is behind the latest release; do not auto-download or replace binaries unless the user asks.
 - Use command help before guessing flags: `biolab <domain> --help`.
+- For create/update JSON payloads, check the backend OpenAPI schema at `<BIOLAB_BASE_URL>/openapi.json` before inventing fields. If `BIOLAB_BASE_URL` is unset, use the CLI default base URL.
 - Before complex domain work, read the matching reference file:
   - Orders: `references/orders.md`
   - Inventory: `references/inventory.md`
@@ -82,6 +83,7 @@ Templates:
 ```bash
 biolab templates list -f json
 biolab templates get-default primer_synthesis -f json
+biolab templates create template.json
 biolab templates set-default <TEMPLATE_ID>
 ```
 
@@ -99,10 +101,11 @@ Primer synthesis orders use `primer_synthesis`. Sequencing orders use `sequencin
 The typical order status flow is:
 
 ```text
-pending -> ordered -> received -> stored
+draft -> pending_approval -> approved -> pending -> ordered -> received -> stored
 ```
 
-When creating orders from JSON, inspect an existing order or use templates first so required customer, supplier, payment, and item fields match backend expectations.
+When creating orders from JSON, inspect the OpenAPI schema, an existing order, or a template first so required customer, supplier, payment, and item fields match backend expectations.
+For primer synthesis orders, first read the default `primer_synthesis` order-info template. If none exists, help the user create one and set it as default before building the order JSON. Preserve user-provided `notes` such as special supplier instructions. Always show the selected template summary and get user confirmation before creating an order.
 
 ## Skill Maintenance
 

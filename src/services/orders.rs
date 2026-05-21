@@ -1,7 +1,7 @@
 use crate::api_response::{envelope_data, extract_array, extract_object};
 use crate::client::BiolabClient;
 use crate::errors::BiolabError;
-use crate::types::{CreatePrimerOrder, CreateSequencingOrder, Order};
+use crate::types::Order;
 
 impl BiolabClient {
     pub async fn list_orders(&self, skip: u32, limit: u32) -> Result<Vec<Order>, BiolabError> {
@@ -16,7 +16,7 @@ impl BiolabClient {
 
     pub async fn create_primer_order(
         &self,
-        order: &CreatePrimerOrder,
+        order: &serde_json::Value,
     ) -> Result<Order, BiolabError> {
         let resp: serde_json::Value = self.http.post("/orders/primer", order).await?;
         extract_object(resp)
@@ -24,7 +24,7 @@ impl BiolabClient {
 
     pub async fn create_sequencing_order(
         &self,
-        order: &CreateSequencingOrder,
+        order: &serde_json::Value,
     ) -> Result<Order, BiolabError> {
         let resp: serde_json::Value = self.http.post("/orders/sequencing", order).await?;
         extract_object(resp)

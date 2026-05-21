@@ -32,6 +32,9 @@ pub fn print_order(order: &Order) {
         "联系人   : {} {}",
         order.customer_name, order.customer_phone
     );
+    if let Some(notes) = order.notes.as_deref().filter(|notes| !notes.is_empty()) {
+        println!("备注     : {notes}");
+    }
     println!(
         "总价     : {}",
         order.total_price.as_deref().unwrap_or("N/A")

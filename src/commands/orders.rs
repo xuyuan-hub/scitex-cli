@@ -5,7 +5,6 @@ use clap::{Args, Subcommand};
 use crate::client::BiolabClient;
 use crate::config::Config;
 use crate::output::{print_order, print_order_brief, print_result, OutputFormat};
-use crate::types::{CreatePrimerOrder, CreateSequencingOrder};
 
 #[derive(Args)]
 pub struct OrdersArgs {
@@ -86,7 +85,7 @@ pub async fn run(
         }
         OrdersCommand::CreatePrimer { file } => {
             let content = std::fs::read_to_string(file)?;
-            let order: CreatePrimerOrder = serde_json::from_str(&content)?;
+            let order: serde_json::Value = serde_json::from_str(&content)?;
             let result = client.create_primer_order(&order).await?;
             match format {
                 OutputFormat::Json => print_result(&result, format),
@@ -95,7 +94,7 @@ pub async fn run(
         }
         OrdersCommand::CreateSequencing { file } => {
             let content = std::fs::read_to_string(file)?;
-            let order: CreateSequencingOrder = serde_json::from_str(&content)?;
+            let order: serde_json::Value = serde_json::from_str(&content)?;
             let result = client.create_sequencing_order(&order).await?;
             match format {
                 OutputFormat::Json => print_result(&result, format),

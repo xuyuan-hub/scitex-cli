@@ -72,6 +72,8 @@ pub struct Order {
     pub customer_phone: String,
     pub customer_email: String,
     #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
     pub total_price: Option<String>,
     pub created_at: String,
     #[serde(default)]
@@ -126,6 +128,8 @@ pub struct CreatePrimerOrder {
     pub customer_phone: String,
     pub customer_email: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub company_name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub invoice_title: String,
@@ -151,6 +155,8 @@ pub struct CreateSequencingOrder {
     pub customer_name: String,
     pub customer_phone: String,
     pub customer_email: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub company_name: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -197,6 +203,8 @@ pub struct Template {
     pub customer_phone: Option<String>,
     #[serde(default)]
     pub customer_email: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 // ============================================================
