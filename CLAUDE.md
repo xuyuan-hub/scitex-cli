@@ -116,15 +116,27 @@ Detailed API schemas are bundled in `skills/biolab-api/references/` and installe
 
 All feature work follows a doc-driven process using plan files under `docs/` with `BiolabCli-YYYY-MM-DD-Name.md` naming (Name in Chinese). Non-plan docs (installation guides, command references) do not follow this pattern.
 
-1. **Write a plan first** — Before coding, create a plan in `docs/` that confirms requirements, lists affected files, and includes a TODO list with `[ ]` checkboxes for each task.
+### Document Organization
+
+All plans (CLI and server-side) live under `docs/feishu/YYYY/MM/`, organized by year and month. This directory is a local mirror synced from Feishu Drive and is gitignored. Non-plan docs (installation guides, command references) remain under `docs/` directly and are committed to git.
+
+### Process
+
+1. **Write a plan first** — Before coding, create a plan under `docs/feishu/YYYY/MM/` that confirms requirements, lists affected files, and includes a TODO list with `[ ]` checkboxes for each task.
 2. **Implement and check off** — As tasks are completed, update `[ ]` to `[x]` with the commit reference.
 3. **Update on interruption** — If work is interrupted or a plan is abandoned, update the TODO list to explain **why** it stopped and **why** the plan was abandoned (if applicable).
 4. **Keep the index current** — Every plan file ends with a TODO list section. This is the single source of truth for implementation status.
 
-Existing plans:
-- `docs/BiolabCli-2026-05-21-项目更新方案.md` — Architecture refactor (modules, services, Agent skills)
-- `docs/BiolabCli-2026-05-25-CLI命令方案.md` — OpenAPI endpoint coverage plan (18 endpoints)
-- `docs/BiolabCli-2026-05-27-项目种子API方案.md` — Project slug-scoped API plan (15 endpoints)
+### Feishu Sync
+
+All plans are stored in Feishu Drive. The `docs/feishu/` directory is a local mirror synced from Feishu and excluded from git.
+
+Feishu root folder: https://v1md2ogd1v3.feishu.cn/drive/folder/SPNcfvJX9ldQVjdAuRGcQJZknXc
+Local mirror: `docs/feishu/YYYY/MM/`
+
+Existing plans (under `docs/feishu/2026/`):
+- `05/` — 16 plans: 3 CLI (架构、CLI命令、项目种子API) + 13 服务端方案（库存、用户、订单、实验记录等）
+- `06/` — 1 plan: 实验方案到执行反馈流程方案
 
 Other docs:
 - `docs/2026-05-21-安装指南.md` — User installation guide

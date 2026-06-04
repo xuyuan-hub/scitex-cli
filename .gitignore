@@ -10,3 +10,8 @@
 
 # Don't commit experiment records
 docs/实验记录/
+docs/feishu
+.claude/*
+.agents/*
+.trae
+AGENTS.md
