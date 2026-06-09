@@ -1,0 +1,4 @@
+interface:
+  display_name: "Biolab Evo"
+  short_description: "Run Biolab evo compute tasks."
+  default_prompt: "Use Biolab evo task workflows for Tm, codon optimization, NGS primer design, barcode checks, and EXP2 primer design."

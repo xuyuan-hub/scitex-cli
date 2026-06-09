@@ -134,6 +134,30 @@ impl BiolabClient {
         extract_object(resp)
     }
 
+    pub async fn create_lab_task_multipart(
+        &self,
+        data: &serde_json::Value,
+        file_fields: &[(&str, &str)],
+        lab_id: Option<&str>,
+    ) -> Result<Task, BiolabError> {
+        let payload = serde_json::to_string(data)
+            .map_err(|e| BiolabError::ParseError(format!("Cannot encode task payload: {e}")))?;
+        let fields = [("payload", payload)];
+        let headers = lab_id
+            .map(|lab_id| vec![("X-Current-Lab", lab_id)])
+            .unwrap_or_default();
+        let resp: serde_json::Value = self
+            .http
+            .post_multipart(
+                lab_tasks_create_path(),
+                &fields,
+                file_fields,
+                headers.as_slice(),
+            )
+            .await?;
+        extract_object(resp)
+    }
+
     pub async fn update_task(
         &self,
         task_id: &str,
@@ -141,6 +165,39 @@ impl BiolabClient {
     ) -> Result<Task, BiolabError> {
         let resp: serde_json::Value = self.http.patch(&task_path(task_id), data).await?;
         extract_object(resp)
+    }
+
+    pub async fn upload_task_field(
+        &self,
+        task_id: &str,
+        file_path: &str,
+        field_key: &str,
+    ) -> Result<serde_json::Value, BiolabError> {
+        let path = task_upload_field_path(task_id);
+        self.http
+            .upload_multipart(&path, file_path, &[("field_key", field_key)], &[])
+            .await
+    }
+
+    pub async fn upload_lab_task_field(
+        &self,
+        task_id: &str,
+        file_path: &str,
+        field_key: &str,
+        lab_id: Option<&str>,
+    ) -> Result<serde_json::Value, BiolabError> {
+        let path = lab_task_upload_field_path(task_id);
+        let headers = lab_id
+            .map(|lab_id| vec![("X-Current-Lab", lab_id)])
+            .unwrap_or_default();
+        self.http
+            .upload_multipart(
+                &path,
+                file_path,
+                &[("field_key", field_key)],
+                headers.as_slice(),
+            )
+            .await
     }
 
     pub async fn list_my_task_assignments(
@@ -248,6 +305,10 @@ fn lab_task_documents_path(task_id: &str) -> String {
     format!("{}/documents", lab_task_path(task_id))
 }
 
+fn lab_task_upload_field_path(task_id: &str) -> String {
+    format!("{}/upload-field", lab_task_path(task_id))
+}
+
 fn lab_task_document_download_path(document_id: &str) -> String {
     format!("/lab/tasks/documents/{}/download", url_encode(document_id))
 }
@@ -283,6 +344,10 @@ fn staff_task_document_download_path(document_id: &str) -> String {
     )
 }
 
+fn task_upload_field_path(task_id: &str) -> String {
+    format!("/tasks/{}/upload-field", url_encode(task_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,6 +361,10 @@ mod tests {
         assert_eq!(
             lab_task_documents_path("task 1"),
             "/lab/tasks/task+1/documents"
+        );
+        assert_eq!(
+            lab_task_upload_field_path("task 1"),
+            "/lab/tasks/task+1/upload-field"
         );
         assert_eq!(
             lab_task_document_download_path("doc 1"),

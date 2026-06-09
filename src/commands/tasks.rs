@@ -29,6 +29,9 @@ pub enum TasksCommand {
     /// Create a task from a JSON file.
     Create {
         file: String,
+        /// Attach input files as field=path entries for multipart task creation.
+        #[arg(long = "file-field")]
+        file_fields: Vec<String>,
         #[arg(long)]
         lab_id: Option<String>,
     },
@@ -61,6 +64,14 @@ pub enum TasksCommand {
     DownloadDocument {
         document_id: String,
         output: Option<String>,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
+    /// Upload a file to a task field (e.g. plasmid file).
+    UploadField {
+        id: String,
+        file: String,
+        field_key: String,
         #[arg(long)]
         lab_id: Option<String>,
     },
@@ -152,10 +163,25 @@ pub async fn run(
                 OutputFormat::Text => print_task_types(&types),
             }
         }
-        TasksCommand::Create { file, lab_id } => {
+        TasksCommand::Create {
+            file,
+            file_fields,
+            lab_id,
+        } => {
             let mut data = read_json_file(file)?;
             prepare_lab_task_payload(&mut data)?;
-            let task = client.create_lab_task(&data, lab_id.as_deref()).await?;
+            let task = if file_fields.is_empty() {
+                client.create_lab_task(&data, lab_id.as_deref()).await?
+            } else {
+                let parsed_file_fields = parse_file_fields(file_fields)?;
+                let file_field_refs: Vec<(&str, &str)> = parsed_file_fields
+                    .iter()
+                    .map(|(field, path)| (field.as_str(), path.as_str()))
+                    .collect();
+                client
+                    .create_lab_task_multipart(&data, &file_field_refs, lab_id.as_deref())
+                    .await?
+            };
             print_result(&task, format);
         }
         TasksCommand::List {
@@ -203,6 +229,17 @@ pub async fn run(
                 .download_lab_task_document(document_id, lab_id.as_deref())
                 .await?;
             write_download(document_id, output.as_deref(), &bytes)?;
+        }
+        TasksCommand::UploadField {
+            id,
+            file,
+            field_key,
+            lab_id,
+        } => {
+            let result = client
+                .upload_lab_task_field(id, file, field_key, lab_id.as_deref())
+                .await?;
+            print_result(&result, format);
         }
         TasksCommand::Results { id, lab_id } => {
             let results = client.list_lab_task_results(id, lab_id.as_deref()).await?;
@@ -281,6 +318,21 @@ fn prepare_lab_task_payload(data: &mut serde_json::Value) -> anyhow::Result<()> 
         .ok_or_else(|| anyhow::anyhow!("Task payload must be a JSON object"))?;
     obj.remove("lab_id");
     Ok(())
+}
+
+fn parse_file_fields(values: &[String]) -> anyhow::Result<Vec<(String, String)>> {
+    values
+        .iter()
+        .map(|value| {
+            let (field, path) = value
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("File field must use field=path format"))?;
+            if field.trim().is_empty() || path.trim().is_empty() {
+                anyhow::bail!("File field must use non-empty field=path values");
+            }
+            Ok((field.to_string(), path.to_string()))
+        })
+        .collect()
 }
 
 fn write_download(document_id: &str, output: Option<&str>, bytes: &[u8]) -> anyhow::Result<()> {
@@ -416,11 +468,81 @@ mod tests {
     fn parses_task_create_with_lab_id() {
         let args = parse_tasks(&["tasks", "create", "task.json", "--lab-id", "lab-1"]);
         match args.command {
-            TasksCommand::Create { file, lab_id } => {
+            TasksCommand::Create {
+                file,
+                file_fields,
+                lab_id,
+            } => {
                 assert_eq!(file, "task.json");
+                assert!(file_fields.is_empty());
                 assert_eq!(lab_id.as_deref(), Some("lab-1"));
             }
             _ => panic!("expected task create command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_create_file_fields() {
+        let args = parse_tasks(&[
+            "tasks",
+            "create",
+            "task.json",
+            "--file-field",
+            "plasmid=plasmid.dna",
+            "--file-field",
+            "template=template.fa",
+        ]);
+        match args.command {
+            TasksCommand::Create {
+                file, file_fields, ..
+            } => {
+                assert_eq!(file, "task.json");
+                assert_eq!(
+                    file_fields,
+                    vec![
+                        "plasmid=plasmid.dna".to_string(),
+                        "template=template.fa".to_string()
+                    ]
+                );
+            }
+            _ => panic!("expected task create command"),
+        }
+    }
+
+    #[test]
+    fn parses_file_field_pairs() {
+        let values = vec![r#"plasmid=C:\data\plasmid.dna"#.to_string()];
+        let parsed = parse_file_fields(&values).expect("file fields should parse");
+        assert_eq!(
+            parsed,
+            vec![("plasmid".to_string(), r#"C:\data\plasmid.dna"#.to_string())]
+        );
+    }
+
+    #[test]
+    fn parses_task_upload_field() {
+        let args = parse_tasks(&[
+            "tasks",
+            "upload-field",
+            "task-1",
+            "plasmid.dna",
+            "plasmid",
+            "--lab-id",
+            "lab-1",
+        ]);
+        match args.command {
+            TasksCommand::UploadField {
+                id,
+                file,
+                field_key,
+                lab_id,
+            } => {
+                assert_eq!(id, "task-1");
+                assert_eq!(file, "plasmid.dna");
+                assert_eq!(field_key, "plasmid");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected upload-field command"),
         }
     }
 

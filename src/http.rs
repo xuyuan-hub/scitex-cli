@@ -227,6 +227,131 @@ impl BiolabHttp {
         parse_response(resp, path).await
     }
 
+    pub(crate) async fn upload_multipart(
+        &self,
+        path: &str,
+        file_path: &str,
+        fields: &[(&str, &str)],
+        extra_headers: &[(&str, &str)],
+    ) -> Result<serde_json::Value, BiolabError> {
+        use std::path::Path as StdPath;
+
+        let fname = StdPath::new(file_path)
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let content = std::fs::read(file_path)
+            .map_err(|e| BiolabError::ParseError(format!("Cannot read file {file_path}: {e}")))?;
+
+        let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        let mut body = Vec::new();
+
+        // Add extra text fields first
+        for (name, value) in fields {
+            body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            body.extend_from_slice(
+                format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n").as_bytes(),
+            );
+            body.extend_from_slice(value.as_bytes());
+            body.extend_from_slice(b"\r\n");
+        }
+
+        // Add file field
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            format!("Content-Disposition: form-data; name=\"file\"; filename=\"{fname}\"\r\n")
+                .as_bytes(),
+        );
+        body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
+        body.extend_from_slice(&content);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+        let mut request = self
+            .client
+            .post(self.url(path))
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(body);
+
+        for (name, value) in extra_headers {
+            request = request.header(
+                HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|e| BiolabError::ParseError(e.to_string()))?,
+                HeaderValue::from_str(value).map_err(|e| BiolabError::ParseError(e.to_string()))?,
+            );
+        }
+
+        let resp = request.send().await.map_err(BiolabError::RequestError)?;
+        parse_response(resp, path).await
+    }
+
+    pub(crate) async fn post_multipart(
+        &self,
+        path: &str,
+        fields: &[(&str, String)],
+        files: &[(&str, &str)],
+        extra_headers: &[(&str, &str)],
+    ) -> Result<serde_json::Value, BiolabError> {
+        use std::path::Path as StdPath;
+
+        let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+        let mut body = Vec::new();
+
+        for (name, value) in fields {
+            body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            body.extend_from_slice(
+                format!("Content-Disposition: form-data; name=\"{name}\"\r\n\r\n").as_bytes(),
+            );
+            body.extend_from_slice(value.as_bytes());
+            body.extend_from_slice(b"\r\n");
+        }
+
+        for (field_name, file_path) in files {
+            let fname = StdPath::new(file_path)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            let content = std::fs::read(file_path).map_err(|e| {
+                BiolabError::ParseError(format!("Cannot read file {file_path}: {e}"))
+            })?;
+
+            body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+            body.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"{field_name}\"; filename=\"{fname}\"\r\n"
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
+            body.extend_from_slice(&content);
+            body.extend_from_slice(b"\r\n");
+        }
+
+        body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+
+        let mut request = self
+            .client
+            .post(self.url(path))
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={boundary}"),
+            )
+            .body(body);
+
+        for (name, value) in extra_headers {
+            request = request.header(
+                HeaderName::from_bytes(name.as_bytes())
+                    .map_err(|e| BiolabError::ParseError(e.to_string()))?,
+                HeaderValue::from_str(value).map_err(|e| BiolabError::ParseError(e.to_string()))?,
+            );
+        }
+
+        let resp = request.send().await.map_err(BiolabError::RequestError)?;
+        parse_response(resp, path).await
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.config.base_url, path)
     }
