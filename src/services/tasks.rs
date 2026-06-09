@@ -4,6 +4,7 @@ use crate::errors::BiolabError;
 use crate::services::url_encode;
 use crate::types::{
     StaffAssignmentDetail, StaffAssignmentItem, Task, TaskDocument, TaskResult, TaskType,
+    WorkflowDetail,
 };
 
 impl BiolabClient {
@@ -134,6 +135,22 @@ impl BiolabClient {
         extract_object(resp)
     }
 
+    pub async fn create_lab_workflow_task(
+        &self,
+        data: &serde_json::Value,
+        lab_id: Option<&str>,
+    ) -> Result<Task, BiolabError> {
+        let path = lab_workflow_create_path();
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .post_with_headers(&path, data, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.post(&path, data).await?
+        };
+        extract_object(resp)
+    }
+
     pub async fn create_lab_task_multipart(
         &self,
         data: &serde_json::Value,
@@ -164,6 +181,16 @@ impl BiolabClient {
         data: &serde_json::Value,
     ) -> Result<Task, BiolabError> {
         let resp: serde_json::Value = self.http.patch(&task_path(task_id), data).await?;
+        extract_object(resp)
+    }
+
+    pub async fn get_task_workflow(&self, task_id: &str) -> Result<WorkflowDetail, BiolabError> {
+        let resp: serde_json::Value = self.http.get(&task_workflow_path(task_id)).await?;
+        extract_object(resp)
+    }
+
+    pub async fn get_task_type(&self, task_type_id: &str) -> Result<TaskType, BiolabError> {
+        let resp: serde_json::Value = self.http.get(&task_type_path(task_type_id)).await?;
         extract_object(resp)
     }
 
@@ -297,6 +324,10 @@ fn lab_tasks_create_path() -> &'static str {
     "/lab/tasks"
 }
 
+fn lab_workflow_create_path() -> &'static str {
+    "/lab/tasks/workflows"
+}
+
 fn lab_task_path(task_id: &str) -> String {
     format!("/lab/tasks/{}", url_encode(task_id))
 }
@@ -315,6 +346,14 @@ fn lab_task_document_download_path(document_id: &str) -> String {
 
 fn lab_task_results_path(task_id: &str) -> String {
     format!("{}/results", lab_task_path(task_id))
+}
+
+fn task_workflow_path(task_id: &str) -> String {
+    format!("{}/workflow", task_path(task_id))
+}
+
+fn task_type_path(task_type_id: &str) -> String {
+    format!("/task-types/{}", url_encode(task_type_id))
 }
 
 fn staff_task_assignments_path(skip: u32, limit: u32) -> String {
@@ -357,6 +396,7 @@ mod tests {
         assert_eq!(lab_task_types_path(), "/lab/tasks/task-types");
         assert_eq!(lab_tasks_path(10, 25), "/lab/tasks?skip=10&limit=25");
         assert_eq!(lab_tasks_create_path(), "/lab/tasks");
+        assert_eq!(lab_workflow_create_path(), "/lab/tasks/workflows");
         assert_eq!(lab_task_path("task 1"), "/lab/tasks/task+1");
         assert_eq!(
             lab_task_documents_path("task 1"),
@@ -377,6 +417,8 @@ mod tests {
     fn builds_general_task_paths() {
         assert_eq!(tasks_path(), "/tasks");
         assert_eq!(task_path("task 1"), "/tasks/task+1");
+        assert_eq!(task_workflow_path("task 1"), "/tasks/task+1/workflow");
+        assert_eq!(task_type_path("type 1"), "/task-types/type+1");
         assert_eq!(
             task_types_path(0, 100, None),
             "/task-types?skip=0&limit=100"

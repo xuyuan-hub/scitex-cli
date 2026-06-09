@@ -340,6 +340,8 @@ pub struct TaskPart {
     #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
+    pub task_type_id: Option<String>,
+    #[serde(default)]
     pub input_data: Option<serde_json::Value>,
     #[serde(default)]
     pub output_schema: Option<serde_json::Value>,
@@ -409,6 +411,34 @@ pub struct TaskResult {
     pub output_data: Option<serde_json::Value>,
     #[serde(default)]
     pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskAssignment {
+    pub id: String,
+    pub task_id: String,
+    pub part_id: String,
+    pub assignee_id: String,
+    pub role: String,
+    pub status: String,
+    pub assigned_by_id: String,
+    #[serde(default)]
+    pub started_at: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowDetail {
+    pub task: Task,
+    #[serde(default)]
+    pub parts: Vec<TaskPart>,
+    #[serde(default)]
+    pub dependencies: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub assignments: Vec<TaskAssignment>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

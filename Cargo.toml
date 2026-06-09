@@ -1,6 +1,6 @@
 [package]
 name = "biolab-cli"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2021"
 description = "CLI client for the Biolab order system (primer synthesis + sequencing), inventory, and lab management"
 
