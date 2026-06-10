@@ -24,11 +24,11 @@ biolab update check
 Authenticate before API calls:
 
 ```bash
-biolab login --background
+biolab login
 biolab status
 ```
 
-If `login --background` prints an authorization URL, send that exact URL to the user and wait for them to complete browser auth before continuing.
+If `login` prints an authorization URL, send that exact URL to the user and wait for them to complete browser auth before continuing.
 
 ## Credentials
 

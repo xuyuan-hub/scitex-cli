@@ -5,8 +5,8 @@ use biolab::commands::{
 };
 use biolab::config::Config;
 use biolab::output::OutputFormat;
-use biolab::{check_status, login, logout, poll_login_from_env, LoginMode};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use biolab::{check_status, login, logout, poll_login_from_env};
+use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 
 /// Biolab lab management CLI.
@@ -39,7 +39,7 @@ impl From<&OutputFormatArg> for OutputFormat {
 #[derive(Subcommand)]
 enum Commands {
     /// Feishu OAuth login.
-    Login(LoginArgs),
+    Login,
     /// Finish background login polling.
     #[command(hide = true)]
     LoginPoll,
@@ -79,13 +79,6 @@ enum Commands {
     Update(update::UpdateArgs),
 }
 
-#[derive(Args)]
-struct LoginArgs {
-    /// Run login polling in the background for agent workflows.
-    #[arg(long, alias = "no-wait")]
-    background: bool,
-}
-
 /// Set Windows console output to UTF-8 so that Chinese and other Unicode text
 /// renders correctly when the CLI prints to a terminal.
 #[cfg(windows)]
@@ -110,13 +103,8 @@ async fn main() {
             println!("\nRun biolab --help to see available commands.\n");
             return;
         }
-        Some(Commands::Login(args)) => {
-            let mode = if args.background {
-                LoginMode::Background
-            } else {
-                LoginMode::Wait
-            };
-            login(&config, mode).await;
+        Some(Commands::Login) => {
+            login(&config).await;
             Ok(())
         }
         Some(Commands::LoginPoll) => {

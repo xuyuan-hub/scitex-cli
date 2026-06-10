@@ -49,13 +49,7 @@ pub fn check_status(config: &Config) -> bool {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum LoginMode {
-    Wait,
-    Background,
-}
-
-pub async fn login(config: &Config, mode: LoginMode) -> bool {
+pub async fn login(config: &Config) -> bool {
     if config.load_token().is_some() {
         println!("已有 token，尝试验证...");
         if check_status(config) {
@@ -78,36 +72,16 @@ pub async fn login(config: &Config, mode: LoginMode) -> bool {
             println!("  请在浏览器中打开以下链接完成飞书认证：");
             println!("\n    {}\n", resp.auth_url);
 
-            match mode {
-                LoginMode::Wait => {
-                    println!("  等待认证完成，每 2 秒检查一次…");
-                    println!("{}\n", "=".repeat(55));
+            println!("  已启动后台登录轮询，Agent 可先返回认证链接。");
+            println!("  用户授权后 token 会自动保存；稍后运行 `biolab status` 检查结果。");
+            println!("{}\n", "=".repeat(55));
 
-                    // Step 2: Poll for JWT
-                    match poll_and_save_token(&client, config, &resp.poll_key).await {
-                        Ok(()) => {
-                            println!("认证成功！Token 已保存到系统凭据库");
-                            check_status(config)
-                        }
-                        Err(e) => {
-                            eprintln!("认证失败: {e}");
-                            false
-                        }
-                    }
-                }
-                LoginMode::Background => {
-                    println!("  已启动后台登录轮询，Agent 可先返回认证链接。");
-                    println!("  用户授权后 token 会自动保存；稍后运行 `biolab status` 检查结果。");
-                    println!("{}\n", "=".repeat(55));
-
-                    if let Err(e) = spawn_login_poller(&resp.poll_key) {
-                        eprintln!("启动后台登录轮询失败: {e}");
-                        return false;
-                    }
-
-                    true
-                }
+            if let Err(e) = spawn_login_poller(&resp.poll_key) {
+                eprintln!("启动后台登录轮询失败: {e}");
+                return false;
             }
+
+            true
         }
         Err(e) => {
             eprintln!("请求认证失败: {e}");
