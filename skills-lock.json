@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "skills": {
+    "biolab-evo": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-evo/SKILL.md",
+      "computedHash": "65e2c941acc748a3f2ccbb8b98f2529beaf07d9a8653fd29fa426a8df2fc08ad"
+    },
+    "biolab-experiment": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-experiment/SKILL.md",
+      "computedHash": "3fab72bbca260f2992ce4742d08f08e45ddd503ea41321d4363667a8e99dfeac"
+    },
+    "biolab-inventory": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-inventory/SKILL.md",
+      "computedHash": "dd291579345667b214312a8462de14e4b5da39ce09d9d91d2eab5378e57db667"
+    },
+    "biolab-lab": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-lab/SKILL.md",
+      "computedHash": "ff999dea7aeae61e1110b27f86efd532a8c9cb8b9a0a756356539059de12c20d"
+    },
+    "biolab-orders": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-orders/SKILL.md",
+      "computedHash": "4ae60a2831b3d3557ca29c33966ffcf8f67ad276118481ddcfe395080c9c1f82"
+    },
+    "biolab-project": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-project/SKILL.md",
+      "computedHash": "085667fb38c24e8a3a2e587801ab02051911a9b0421198beda5e8b3df694deb8"
+    },
+    "biolab-shared": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-shared/SKILL.md",
+      "computedHash": "00db89efe83f90f50b5701e1b44632b45776cedcdc49e938debf7ed1caa9e2a3"
+    },
+    "biolab-tashan": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-tashan/SKILL.md",
+      "computedHash": "1e344184f97997e886595afd806af4c0108973b4bc147ef7e85cfd3d049501a3"
+    },
+    "biolab-task": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-task/SKILL.md",
+      "computedHash": "315f0173b9ffb33d250c857c6af6d29b5b4492e1473c178979ff688c10e380e6"
+    },
+    "biolab-templates": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-templates/SKILL.md",
+      "computedHash": "40e756b13276cbcfe301a1f56c1e83d87cc4096dfb71db5ead92d16d4976b6d9"
+    },
+    "biolab-users": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-users/SKILL.md",
+      "computedHash": "1d63fbad8684c0114e01e8c5658c762706ee28e83115bf5225077d0b61129d1d"
+    }
+  }
+}
