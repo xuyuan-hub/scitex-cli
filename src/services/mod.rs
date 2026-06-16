@@ -1,3 +1,4 @@
+mod admin;
 mod inventory;
 mod lab;
 mod orders;

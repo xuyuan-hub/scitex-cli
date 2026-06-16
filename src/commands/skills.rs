@@ -11,6 +11,7 @@ const EXPECTED_SKILLS: &[&str] = &[
     "biolab-orders",
     "biolab-templates",
     "biolab-inventory",
+    "biolab-admin",
     "biolab-lab",
     "biolab-project",
     "biolab-users",

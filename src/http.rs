@@ -141,6 +141,25 @@ impl BiolabHttp {
         parse_response(resp, path).await
     }
 
+    pub(crate) async fn delete_empty(&self, path: &str) -> Result<(), BiolabError> {
+        let resp = self
+            .client
+            .delete(self.url(path))
+            .send()
+            .await
+            .map_err(BiolabError::RequestError)?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(BiolabError::HttpError {
+                status,
+                path: path.into(),
+                detail,
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) async fn download_bytes(&self, path: &str) -> Result<Vec<u8>, BiolabError> {
         let resp = self
             .client

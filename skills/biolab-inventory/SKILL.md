@@ -60,23 +60,57 @@ Rules:
 
 Do NOT use `biolab inventory check` as the primary discovery method. Its literal name matching cannot handle Chinese/English variations, abbreviations, or synonyms.
 
-Instead, the LLM must actively search for each requirement:
+Instead, the LLM must actively search for all requirements in bulk using the `--filters` parameter with `like` operator and `or` combine logic. This replaces many individual `--search` calls with 1-2 queries.
 
-### Step 1 — Search for items with multiple terms
+### Filter Schema
 
-```bash
-biolab inventory items --search "<term>" -f json
+```text
+--filters 'JSON [{field, operator, value, combine}]'
 ```
 
-Try multiple search terms per requirement: Chinese name, English name, abbreviation, catalog number. The backend matches substrings, so short core terms often work best (e.g. "连接酶" for ligase, "内切酶" for endonuclease, "聚合酶" for polymerase).
+**Operators:** `eq`/`equal`, `neq`/`not_equal`, `lt`/`less_than`, `gt`/`greater_than`, `lte`/`less_or_equal`, `gte`/`greater_or_equal`, `like`
 
-### Step 2 — Check stock for matched items
+**Combine:** `and`, `or`
+
+**Fields (items):** `name`, `category`, `supplier`, `catalog_number`, `unit`, `specification`, `is_active`, `created_at`, `updated_at`
+
+**Fields (summary):** `name`, `category`, `supplier`, `catalog_number`, `unit`, `specification`, `is_active`, `created_at`
+
+`like` uses SQL `LIKE` patterns: `%word%` for substring match, `word%` for prefix, `%word` for suffix.
+
+### Step 1 — Search for ALL items with one OR-combined query
+
+Build a single filter array with one entry per search term, all combined with `or`:
 
 ```bash
-biolab inventory summary --search "<matched_item_name>" -f json
+biolab inventory items --filters '[
+  {"field":"name","operator":"like","value":"%连接酶%","combine":"or"},
+  {"field":"name","operator":"like","value":"%EcoRI%","combine":"or"},
+  {"field":"name","operator":"like","value":"%内切酶%","combine":"or"},
+  {"field":"name","operator":"like","value":"%聚合酶%","combine":"or"},
+  {"field":"name","operator":"like","value":"%感受态%","combine":"or"},
+  {"field":"name","operator":"like","value":"%DNA%","combine":"or"},
+  {"field":"name","operator":"like","value":"%胶回收%","combine":"or"},
+  {"field":"name","operator":"like","value":"%培养基%","combine":"or"}
+]' -f json
 ```
 
-This returns current stock, batches, remaining quantities, and units per item.
+Cover each requirement with multiple search terms (Chinese, English, abbreviation). The LLM is responsible for picking a diverse set of terms that span all requirements in one query.
+
+### Step 2 — Check stock for matched items in bulk
+
+Use the same OR-combined filter pattern to get stock summaries for every matched item at once:
+
+```bash
+biolab inventory summary --filters '[
+  {"field":"name","operator":"like","value":"%连接酶%","combine":"or"},
+  {"field":"name","operator":"like","value":"%XhoI%","combine":"or"},
+  {"field":"name","operator":"like","value":"%高保真%","combine":"or"},
+  {"field":"name","operator":"like","value":"%FastPure%","combine":"or"}
+]' -f json
+```
+
+Use the actual matched item names from Step 1 to narrow the summary filter terms.
 
 ### Step 3 — LLM judges the match
 
@@ -92,7 +126,7 @@ For each requirement, report: matched item, stock batch(es), remaining quantity,
 
 ### Why not `biolab inventory check`
 
-The aggregate `biolab inventory check requirements.json` command uses literal name matching. It will miss items whose inventory names differ from the requirement name — for example, searching "T4 DNA Ligase" will not find "T4 DNA连接酶", and searching "XhoI" will not find "XhoI内切酶". LLM-driven search with multiple terms per requirement is the correct approach.
+The aggregate `biolab inventory check requirements.json` command uses literal name matching. It will miss items whose inventory names differ from the requirement name — for example, searching "T4 DNA Ligase" will not find "T4 DNA连接酶", and searching "XhoI" will not find "XhoI内切酶". LLM-driven bulk search with `like` + `or` is the correct approach.
 
 ## Experiment Rule
 

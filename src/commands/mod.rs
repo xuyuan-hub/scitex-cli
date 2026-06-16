@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod inventory;
 pub mod lab;
 pub mod orders;

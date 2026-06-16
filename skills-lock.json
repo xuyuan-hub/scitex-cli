@@ -19,6 +19,12 @@
       "skillPath": "skills/biolab-inventory/SKILL.md",
       "computedHash": "dd291579345667b214312a8462de14e4b5da39ce09d9d91d2eab5378e57db667"
     },
+    "biolab-admin": {
+      "source": "xuyuan-hub/biolab-cli",
+      "sourceType": "github",
+      "skillPath": "skills/biolab-admin/SKILL.md",
+      "computedHash": "a9e38d05479c5a30a6a4f76bbbf79e07b686d17aa8ba767b2f98f5bce0c95cbe"
+    },
     "biolab-lab": {
       "source": "xuyuan-hub/biolab-cli",
       "sourceType": "github",
