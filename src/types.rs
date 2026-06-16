@@ -247,6 +247,10 @@ pub struct Stock {
     #[serde(default)]
     pub location_path: Option<String>,
     #[serde(default)]
+    pub item_usage_unit: Option<String>,
+    #[serde(default, deserialize_with = "opt_string_or_f64")]
+    pub item_usage_quantity: Option<f64>,
+    #[serde(default)]
     pub germplasm_id: Option<String>,
     #[serde(default)]
     pub plate_id: Option<String>,
@@ -258,8 +262,8 @@ pub struct Stock {
     pub generation: Option<String>,
     #[serde(default)]
     pub origin: Option<String>,
-    #[serde(default)]
-    pub weight_g: Option<String>,
+    #[serde(default, deserialize_with = "opt_string_or_f64")]
+    pub weight_g: Option<f64>,
     #[serde(default)]
     pub notes: Option<String>,
     #[serde(default)]
@@ -315,6 +319,10 @@ pub struct InventoryItem {
     pub catalog_number: Option<String>,
     #[serde(default)]
     pub unit: Option<String>,
+    #[serde(default)]
+    pub usage_unit: Option<String>,
+    #[serde(default, deserialize_with = "opt_string_or_f64")]
+    pub usage_unit_conversion: Option<f64>,
     #[serde(default)]
     pub storage_condition: Option<String>,
     #[serde(default)]

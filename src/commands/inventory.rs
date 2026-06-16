@@ -522,6 +522,8 @@ async fn check_inventory_requirements(
                     "batch_label": stock.batch_label,
                     "remaining_quantity": stock.remaining_quantity,
                     "unit": stock.unit,
+                    "item_usage_unit": stock.item_usage_unit,
+                    "item_usage_quantity": stock.item_usage_quantity,
                     "location_id": stock.storage_location_id,
                     "location_path": stock.location_path,
                 })
@@ -722,6 +724,8 @@ fn requirement_row(
                 "category": item.category,
                 "supplier": item.supplier,
                 "unit": item.unit,
+                "usage_unit": item.usage_unit,
+                "usage_unit_conversion": item.usage_unit_conversion,
             })
         }),
         "available_quantity": available_quantity,
