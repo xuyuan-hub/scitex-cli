@@ -8,6 +8,7 @@ use crate::client::BiolabClient;
 use crate::config::Config;
 use crate::errors::BiolabError;
 use crate::output::{print_result, OutputFormat};
+use crate::types::StaffUserInfo;
 
 #[derive(Args)]
 pub struct AdminArgs {
@@ -30,12 +31,37 @@ pub enum AdminTaskTypesCommand {
     Create { file: String },
     /// Delete a task type by id.
     Delete { id: String },
+    /// Manage staff bindings for a task type.
+    Staff {
+        #[command(subcommand)]
+        command: AdminTaskTypeStaffCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AdminTaskTypeStaffCommand {
+    /// List staff bound to a task type.
+    List { type_id: String },
+    /// Bind one staff user to a task type.
+    Add { type_id: String, user_id: String },
+    /// Remove one staff user from a task type.
+    Remove { type_id: String, user_id: String },
 }
 
 #[derive(Debug, Serialize)]
 struct DeletedTaskType<'a> {
     id: &'a str,
     deleted: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct StaffBindingChange<'a> {
+    type_id: &'a str,
+    user_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    assigned: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    removed: Option<bool>,
 }
 
 pub async fn run(
@@ -68,10 +94,92 @@ pub async fn run(
                     OutputFormat::Text => println!("Deleted task type: {id}"),
                 }
             }
+            AdminTaskTypesCommand::Staff { command } => {
+                run_task_type_staff(&client, command, format).await?;
+            }
         },
     }
 
     Ok(())
+}
+
+async fn run_task_type_staff(
+    client: &BiolabClient,
+    command: &AdminTaskTypeStaffCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        AdminTaskTypeStaffCommand::List { type_id } => {
+            let staff = client
+                .list_admin_task_type_staff(type_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_staff_list(&staff, format);
+        }
+        AdminTaskTypeStaffCommand::Add { type_id, user_id } => {
+            client
+                .assign_admin_task_type_staff(type_id, user_id)
+                .await
+                .map_err(admin_operation_error)?;
+            match format {
+                OutputFormat::Json => print_result(
+                    &StaffBindingChange {
+                        type_id,
+                        user_id,
+                        assigned: Some(true),
+                        removed: None,
+                    },
+                    format,
+                ),
+                OutputFormat::Text => {
+                    println!("Assigned staff to task type: type={type_id} user={user_id}")
+                }
+            }
+        }
+        AdminTaskTypeStaffCommand::Remove { type_id, user_id } => {
+            client
+                .remove_admin_task_type_staff(type_id, user_id)
+                .await
+                .map_err(admin_operation_error)?;
+            match format {
+                OutputFormat::Json => print_result(
+                    &StaffBindingChange {
+                        type_id,
+                        user_id,
+                        assigned: None,
+                        removed: Some(true),
+                    },
+                    format,
+                ),
+                OutputFormat::Text => {
+                    println!("Removed staff from task type: type={type_id} user={user_id}")
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn print_staff_list(staff: &Vec<StaffUserInfo>, format: &OutputFormat) {
+    match format {
+        OutputFormat::Json => print_result(staff, format),
+        OutputFormat::Text => {
+            if staff.is_empty() {
+                println!("No staff bound to this task type");
+                return;
+            }
+            println!("Task type staff:");
+            for item in staff {
+                let assignment_id = item.assignment_id.as_deref().unwrap_or("-");
+                let full_name = item.full_name.as_deref().unwrap_or("-");
+                println!(
+                    "{}  {}  {}  {}",
+                    item.user_id, assignment_id, item.email, full_name
+                );
+            }
+        }
+    }
 }
 
 fn read_json_file(path: &str) -> anyhow::Result<serde_json::Value> {
@@ -284,6 +392,54 @@ mod tests {
                 command: AdminTaskTypesCommand::Delete { id },
             } => assert_eq!(id, "type-1"),
             _ => panic!("expected admin task-types delete command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_type_staff_list() {
+        let args = parse_admin(&["admin", "task-types", "staff", "list", "type-1"]);
+        match args.command {
+            AdminCommand::TaskTypes {
+                command:
+                    AdminTaskTypesCommand::Staff {
+                        command: AdminTaskTypeStaffCommand::List { type_id },
+                    },
+            } => assert_eq!(type_id, "type-1"),
+            _ => panic!("expected admin task-types staff list command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_type_staff_add() {
+        let args = parse_admin(&["admin", "task-types", "staff", "add", "type-1", "user-1"]);
+        match args.command {
+            AdminCommand::TaskTypes {
+                command:
+                    AdminTaskTypesCommand::Staff {
+                        command: AdminTaskTypeStaffCommand::Add { type_id, user_id },
+                    },
+            } => {
+                assert_eq!(type_id, "type-1");
+                assert_eq!(user_id, "user-1");
+            }
+            _ => panic!("expected admin task-types staff add command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_type_staff_remove() {
+        let args = parse_admin(&["admin", "task-types", "staff", "remove", "type-1", "user-1"]);
+        match args.command {
+            AdminCommand::TaskTypes {
+                command:
+                    AdminTaskTypesCommand::Staff {
+                        command: AdminTaskTypeStaffCommand::Remove { type_id, user_id },
+                    },
+            } => {
+                assert_eq!(type_id, "type-1");
+                assert_eq!(user_id, "user-1");
+            }
+            _ => panic!("expected admin task-types staff remove command"),
         }
     }
 

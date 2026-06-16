@@ -83,6 +83,30 @@ impl BiolabHttp {
         parse_response(resp, path).await
     }
 
+    pub(crate) async fn post_empty<B: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<(), BiolabError> {
+        let resp = self
+            .client
+            .post(self.url(path))
+            .json(body)
+            .send()
+            .await
+            .map_err(BiolabError::RequestError)?;
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let detail = resp.text().await.unwrap_or_default();
+            return Err(BiolabError::HttpError {
+                status,
+                path: path.into(),
+                detail,
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) async fn post_with_headers<T: DeserializeOwned, B: serde::Serialize>(
         &self,
         path: &str,

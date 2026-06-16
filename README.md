@@ -138,7 +138,7 @@ After installing skills via `npx skills add` or `biolab skills install`, the Age
 | `biolab-templates` | Order-info templates for company, invoice, PI, payment, recipient, and notes |
 | `biolab-inventory` | Generic inventory items, stock batches, inventory checks, checkin/checkout, FIFO checkout, adjust/transfer, transactions, storage locations |
 | `biolab-experiment` | Experiment planning and execution workflow with inventory checks before task creation and task-linked checkout during execution |
-| `biolab-admin` | Admin task type catalog creation and deletion |
+| `biolab-admin` | Admin task type catalog creation, deletion, and staff binding |
 | `biolab-lab` | Lab info, members, roles, invitations, applications, approval rules |
 | `biolab-project` | Project slug workflows for germplasm, sequencing files, stocks, planting orders, and harvests |
 | `biolab-users` | Login status, authenticated profile, contact fields, password changes |
@@ -418,7 +418,7 @@ biolab skills install --global
 | `biolab-templates` | 订单信息模板：单位、发票、PI、付款方式、收货地址、备注 |
 | `biolab-inventory` | 通用物料、库存批次、库存检查、入库/出库、FIFO 出库、调整/转移、交易记录、存储位置 |
 | `biolab-experiment` | 实验方案与执行工作流：创建任务前检查库存，执行阶段关联任务出库 |
-| `biolab-admin` | 管理端任务类型目录的创建与删除 |
+| `biolab-admin` | 管理端任务类型目录的创建、删除与员工绑定 |
 | `biolab-lab` | 课题组信息、成员、角色、邀请、入组申请、审批规则 |
 | `biolab-project` | 按项目 slug 操作种质、测序文件、库存、种植单和收获记录 |
 | `biolab-users` | 登录状态、当前用户资料、联系人字段、密码修改 |

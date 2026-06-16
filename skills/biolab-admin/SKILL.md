@@ -9,7 +9,7 @@ metadata:
 
 # Biolab Admin Task Type Catalog
 
-Use this skill when the user wants to define or manage reusable Biolab task types, such as adding a new staff review task type or compute task type to the platform catalog.
+Use this skill when the user wants to define or manage reusable Biolab task types, such as adding a new staff review task type or compute task type to the platform catalog. Also use it when binding or unbinding staff users who are allowed to handle a task type.
 
 Examples:
 
@@ -18,6 +18,9 @@ Examples:
 - `添加一个 staff task type`
 - `新增一个 compute task type，输入是 fasta 文件`
 - `delete this temporary task type`
+- `把这个任务类型绑定给某个员工`
+- `让这个员工可以处理 sample_qc 任务类型`
+- `移除某个员工和任务类型的绑定`
 
 Do not use this skill for creating executable task instances. For actual task execution, read `../biolab-task/SKILL.md` and use `biolab tasks create` or `biolab tasks create-workflow`.
 
@@ -30,6 +33,9 @@ Use the top-level admin command group:
 ```bash
 biolab admin task-types create <task_type.json>
 biolab admin task-types delete <TASK_TYPE_ID>
+biolab admin task-types staff list <TASK_TYPE_ID>
+biolab admin task-types staff add <TASK_TYPE_ID> <USER_ID>
+biolab admin task-types staff remove <TASK_TYPE_ID> <USER_ID>
 ```
 
 Do not wrap these normal task execution endpoints as admin catalog commands:
@@ -164,3 +170,23 @@ After creation, summarize:
 - any required input fields
 
 For deletion, report the deleted task type id.
+
+## Staff Binding
+
+Task type staff binding controls which staff users can handle a reusable task type. It is platform catalog configuration, not a normal task instance assignment.
+
+Use:
+
+```bash
+biolab admin task-types staff list <TASK_TYPE_ID>
+biolab admin task-types staff add <TASK_TYPE_ID> <USER_ID>
+biolab admin task-types staff remove <TASK_TYPE_ID> <USER_ID>
+```
+
+Rules:
+
+- Use this workflow when the user asks to bind, assign, allow, authorize, remove, or unbind a staff user for a task type.
+- `remove` takes `USER_ID`, not `assignment_id`, because the backend DELETE path is `/task-types/{type_id}/staff/{user_id}`.
+- If the user gives a name or email rather than `USER_ID`, first use available user/lab-member lookup commands to resolve the user ID. If no reliable lookup is available, ask the user for the user ID.
+- Do not use `biolab tasks create` or workflow `assignee_ids` for task type catalog binding. Those are for task instances.
+- After binding or unbinding, summarize the task type id and user id. Use `staff list` when the user wants to verify current bindings.

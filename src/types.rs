@@ -508,6 +508,16 @@ pub struct TaskTypeDocument {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StaffUserInfo {
+    #[serde(default)]
+    pub assignment_id: Option<String>,
+    pub user_id: String,
+    #[serde(default)]
+    pub full_name: Option<String>,
+    pub email: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDocument {
     pub id: String,
     pub task_id: String,
@@ -820,5 +830,32 @@ mod tests {
             serde_json::from_str(json).expect("should ignore internal staff binding details");
         let value = serde_json::to_value(task_type).expect("should serialize task type");
         assert!(value.get("assigned_staff").is_none());
+    }
+
+    #[test]
+    fn staff_user_info_parses_task_type_binding() {
+        let value: StaffUserInfo = serde_json::from_value(serde_json::json!({
+            "assignment_id": "assignment-1",
+            "user_id": "user-1",
+            "full_name": null,
+            "email": "staff@example.com"
+        }))
+        .expect("staff binding should parse");
+        assert_eq!(value.assignment_id.as_deref(), Some("assignment-1"));
+        assert_eq!(value.user_id, "user-1");
+        assert_eq!(value.full_name, None);
+        assert_eq!(value.email, "staff@example.com");
+    }
+
+    #[test]
+    fn staff_user_info_allows_missing_assignment_id() {
+        let value: StaffUserInfo = serde_json::from_value(serde_json::json!({
+            "user_id": "user-1",
+            "full_name": "Staff",
+            "email": "staff@example.com"
+        }))
+        .expect("staff binding without assignment_id should parse");
+        assert_eq!(value.assignment_id, None);
+        assert_eq!(value.user_id, "user-1");
     }
 }
