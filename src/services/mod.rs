@@ -1,4 +1,5 @@
 mod admin;
+mod error_reports;
 mod inventory;
 mod lab;
 mod orders;

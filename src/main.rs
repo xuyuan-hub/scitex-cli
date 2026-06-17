@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use biolab::commands::{
-    admin, inventory, lab, orders, project, projects, skills, tasks, templates, update, users,
+    admin, error_report, inventory, lab, orders, project, projects, skills, tasks, templates,
+    update, users,
 };
 use biolab::config::Config;
+use biolab::error_history::ErrorHistory;
+use biolab::errors::BiolabError;
 use biolab::output::OutputFormat;
+use biolab::types::{ErrorCategory, ErrorReportCreate};
 use biolab::{check_status, login, logout, poll_login_from_env};
 use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
@@ -80,6 +84,9 @@ enum Commands {
 
     /// Check CLI updates.
     Update(update::UpdateArgs),
+
+    /// Submit an error report.
+    ErrorReport(error_report::ErrorReportArgs),
 }
 
 /// Set Windows console output to UTF-8 so that Chinese and other Unicode text
@@ -138,10 +145,157 @@ async fn main() {
         Some(Commands::Admin(args)) => admin::run(&args, &config, &format).await,
         Some(Commands::Skills(args)) => skills::run(&args, &format),
         Some(Commands::Update(args)) => update::run(&args, &format).await,
+        Some(Commands::ErrorReport(args)) => error_report::run(&args, &config, &format).await,
     };
 
     if let Err(e) = result {
+        let cmd = command_context();
+        let fingerprint = error_fingerprint(&e, &cmd);
+
+        // Always record the error locally
+        let mut history = ErrorHistory::load();
+        history.record(
+            &fingerprint,
+            &cmd,
+            error_type_label(&e),
+            &e.to_string(),
+        );
+
         eprintln!("{}: {e}", "Error".red().bold());
+
+        // If the same error keeps happening, offer to report it
+        if history.check_threshold(&fingerprint, 10, 3) {
+            if prompt_yn("检测到同类错误反复出现。是否上报错误详情帮助改进？") {
+                match submit_error_report(&config, &e, &cmd).await {
+                    Ok(report_id) => {
+                        eprintln!("{} 错误已上报（ID: {}）", "✓".green(), report_id);
+                    }
+                    Err(report_err) => {
+                        eprintln!("{}: {report_err}", "上报失败".yellow());
+                    }
+                }
+            }
+        }
+
         std::process::exit(1);
     }
+}
+
+fn command_context() -> String {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        return "biolab".to_string();
+    }
+    let mut ctx = String::from("biolab");
+    let mut skip_next = false;
+    for (_i, arg) in args.iter().enumerate().skip(1) {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if arg == "--token" || arg == "-t" || arg == "--password" {
+            ctx.push_str(" ***");
+            skip_next = true;
+        } else if arg.starts_with("--token=") || arg.starts_with("-t=") || arg.starts_with("--password=") {
+            ctx.push_str(" ***");
+        } else {
+            ctx.push(' ');
+            ctx.push_str(arg);
+        }
+    }
+    ctx
+}
+
+fn error_fingerprint(e: &anyhow::Error, cmd: &str) -> String {
+    let err_str = e.to_string();
+    // Extract key error pattern: status code + path for HTTP errors,
+    // or error variant name for other errors
+    if let Some(biolab_err) = e.downcast_ref::<BiolabError>() {
+        match biolab_err {
+            BiolabError::HttpError { status, path, .. } => {
+                format!("{cmd}::HttpError({status})::{path}")
+            }
+            BiolabError::NotAuthenticated => {
+                format!("{cmd}::NotAuthenticated")
+            }
+            _ => {
+                format!("{cmd}::{}", error_type_label(e))
+            }
+        }
+    } else {
+        // For anyhow-wrapped errors, take first 80 chars of message as fingerprint
+        let short = if err_str.len() > 80 { &err_str[..80] } else { &err_str };
+        format!("{cmd}::Anyhow({short})")
+    }
+}
+
+fn error_type_label(e: &anyhow::Error) -> &'static str {
+    if let Some(biolab_err) = e.downcast_ref::<BiolabError>() {
+        match biolab_err {
+            BiolabError::HttpError { .. } => "HttpError",
+            BiolabError::RequestError(_) => "RequestError",
+            BiolabError::NotAuthenticated => "NotAuthenticated",
+            BiolabError::ParseError(_) => "ParseError",
+            BiolabError::IoError(_) => "IoError",
+        }
+    } else {
+        "Unknown"
+    }
+}
+
+fn error_category(e: &anyhow::Error) -> ErrorCategory {
+    if let Some(biolab_err) = e.downcast_ref::<BiolabError>() {
+        match biolab_err {
+            BiolabError::HttpError { status, .. } if *status == 401 || *status == 403 => {
+                ErrorCategory::Permission
+            }
+            BiolabError::NotAuthenticated => ErrorCategory::Permission,
+            BiolabError::ParseError(_) => ErrorCategory::Data,
+            BiolabError::RequestError(_) => ErrorCategory::Functional,
+            BiolabError::HttpError { .. } => ErrorCategory::Functional,
+            BiolabError::IoError(_) => ErrorCategory::Other,
+        }
+    } else {
+        ErrorCategory::Other
+    }
+}
+
+fn prompt_yn(prompt: &str) -> bool {
+    use std::io::{self, Write};
+    print!("{prompt} [Y/n] ");
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_ok() {
+        let trimmed = input.trim().to_lowercase();
+        trimmed.is_empty() || trimmed == "y" || trimmed == "yes"
+    } else {
+        false
+    }
+}
+
+async fn submit_error_report(
+    config: &Arc<Config>,
+    e: &anyhow::Error,
+    cmd: &str,
+) -> Result<String, anyhow::Error> {
+    let client = biolab::client::BiolabClient::new(Arc::clone(config))?;
+    let category = error_category(e);
+    let title = format!("{cmd}: {}", error_type_label(e));
+    let description = format!(
+        "命令: {cmd}\n错误类型: {}\n错误详情: {e}\nCLI版本: {}\n平台: {}",
+        error_type_label(e),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+    );
+
+    let report = ErrorReportCreate {
+        category,
+        title,
+        description,
+        url: None,
+        user_agent: Some(error_report::crate_user_agent()),
+    };
+
+    let resp = client.post_error_report(&report).await?;
+    Ok(resp.id)
 }

@@ -700,6 +700,72 @@ pub struct StaffAssignmentDetail {
     pub latest_result: Option<TaskResult>,
 }
 
+// ============================================================
+// Error report types
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ErrorCategory {
+    UiDisplay,
+    Functional,
+    Data,
+    Performance,
+    Permission,
+    Other,
+}
+
+impl std::fmt::Display for ErrorCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ErrorCategory::UiDisplay => write!(f, "ui_display"),
+            ErrorCategory::Functional => write!(f, "functional"),
+            ErrorCategory::Data => write!(f, "data"),
+            ErrorCategory::Performance => write!(f, "performance"),
+            ErrorCategory::Permission => write!(f, "permission"),
+            ErrorCategory::Other => write!(f, "other"),
+        }
+    }
+}
+
+impl From<&str> for ErrorCategory {
+    fn from(s: &str) -> Self {
+        match s {
+            "ui_display" => ErrorCategory::UiDisplay,
+            "functional" => ErrorCategory::Functional,
+            "data" => ErrorCategory::Data,
+            "performance" => ErrorCategory::Performance,
+            "permission" => ErrorCategory::Permission,
+            _ => ErrorCategory::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorReportCreate {
+    pub category: ErrorCategory,
+    pub title: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_agent: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorReportResponse {
+    pub id: String,
+    pub user_id: String,
+    pub category: String,
+    pub title: String,
+    pub description: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub user_agent: Option<String>,
+    pub created_at: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

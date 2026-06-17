@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod error_report;
 pub mod inventory;
 pub mod lab;
 pub mod orders;
