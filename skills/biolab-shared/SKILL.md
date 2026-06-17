@@ -67,4 +67,5 @@ Do not invent CLI commands for backend endpoints that `biolab <domain> --help` d
   - Lab: `../biolab-lab/SKILL.md`
   - Project administration: `../biolab-project/SKILL.md`
   - Tashan project workflows: `../biolab-tashan/SKILL.md`
+  - Error Report: `../biolab-error-report/SKILL.md`
   - Users: `../biolab-users/SKILL.md`
