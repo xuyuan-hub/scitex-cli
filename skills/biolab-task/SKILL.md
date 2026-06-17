@@ -123,13 +123,18 @@ The JSON payload should follow the normal task shape:
   "parts": [
     {
       "name": "<optional part name>",
-      "input_data": {}
+      "input_data": {
+        "<required_field>": "<value>"
+      }
     }
   ]
 }
 ```
 
 Use this when one task type is enough for the full request.
+
+**Critical: input_data placement.** The backend validates each part's `input_data` against that part's task type `input_schema`. Required fields from the task type schema MUST go into `parts[].input_data`, not the root-level `input_data`. Putting them at the root will fail with HTTP 422:
+`Part '<name>' input validation failed: 缺少必填字段: <field>`.
 
 ## Creating A Workflow Task
 
@@ -145,14 +150,18 @@ The JSON payload should follow the workflow task shape:
       "client_key": "stage_a",
       "name": "<stage name>",
       "task_type_id": "<stage_task_type_id>",
-      "input_data": {},
+      "input_data": {
+        "<required_field>": "<value>"
+      },
       "sort_order": 10
     },
     {
       "client_key": "stage_b",
       "name": "<next stage>",
       "task_type_id": "<stage_task_type_id>",
-      "input_data": {},
+      "input_data": {
+        "<required_field>": "<value>"
+      },
       "assignee_ids": ["<user_id>"],
       "sort_order": 20
     }
@@ -175,6 +184,7 @@ Important rules:
 - use `condition_type: "completed"` when the dependent stage should unlock only after the prerequisite stage completes successfully
 - each stage should use the task type that best matches that stage only
 - put staff assignees on the relevant stage with `assignee_ids`
+- task type required fields go into `parts[].input_data`, not the root `input_data` — same rule as single-stage tasks
 
 ## Workflow Status Semantics
 
@@ -200,6 +210,17 @@ For workflow tasks:
 1. validate each stage's required inputs against that stage's task type when practical
 2. ask concise follow-up questions for missing values
 3. do not invent dependency structure that the user did not imply
+
+### Downstream Stages That Need Upstream Outputs
+
+When a downstream stage's required input comes from an upstream compute stage's output (e.g. Design NGS Primer needs `template` from Codon Optimize output), you **cannot** create the full workflow at once — the backend validates all required inputs at creation time and will reject missing fields with HTTP 422.
+
+Two approaches:
+
+1. **Two-step (reliable, preferred)**: Create the upstream stage(s) as a task or workflow first. After they complete, download the results (`biolab tasks get <id> -f json` gives signed download URLs), then create the downstream stages with the concrete output data.
+2. **When all inputs are known upfront**: If every stage's required inputs are available at creation time (no data dependency between stages), create the full workflow in one shot.
+
+Do not leave a required field empty or use a placeholder hoping the backend will fill it — the API validates all parts at submission time.
 
 ## Confirmation
 
