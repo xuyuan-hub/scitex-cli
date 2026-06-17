@@ -1,7 +1,12 @@
+use std::io::Read;
+use std::path::Path;
+
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
+use crate::commands::skills;
 use crate::output::{print_result, OutputFormat};
 
 const LATEST_RELEASE_API: &str =
@@ -18,6 +23,12 @@ pub struct UpdateArgs {
 pub enum UpdateCommand {
     /// Check GitHub Releases for a newer CLI version
     Check,
+    /// Download and install the latest version from GitHub, then update skills
+    Install {
+        /// Install skills globally
+        #[arg(long)]
+        global: bool,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,25 +60,32 @@ struct ReleaseAsset {
 }
 
 pub async fn run(args: &UpdateArgs, format: &OutputFormat) -> anyhow::Result<()> {
-    match args.command {
+    match &args.command {
         UpdateCommand::Check => {
-            let report = check_latest_release().await?;
+            let report = check_report().await?;
             print_update_report(&report, format);
+        }
+        UpdateCommand::Install { global } => {
+            install_latest(*global).await?;
         }
     }
     Ok(())
 }
 
-async fn check_latest_release() -> anyhow::Result<UpdateReport> {
-    let release = reqwest::Client::new()
+async fn fetch_latest_release() -> anyhow::Result<GithubRelease> {
+    reqwest::Client::new()
         .get(LATEST_RELEASE_API)
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
         .await?
         .error_for_status()?
         .json::<GithubRelease>()
-        .await?;
+        .await
+        .map_err(Into::into)
+}
 
+async fn check_report() -> anyhow::Result<UpdateReport> {
+    let release = fetch_latest_release().await?;
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let latest_version = release.tag_name.trim_start_matches('v').to_string();
     let update_available = version_gt(&latest_version, &current_version);
@@ -89,6 +107,158 @@ async fn check_latest_release() -> anyhow::Result<UpdateReport> {
         release_url: release.html_url,
         recommended_assets,
     })
+}
+
+async fn install_latest(global_skills: bool) -> anyhow::Result<()> {
+    let release = fetch_latest_release().await?;
+    let current_version = env!("CARGO_PKG_VERSION");
+    let latest_version = release.tag_name.trim_start_matches('v').to_string();
+
+    if !version_gt(&latest_version, current_version) {
+        println!(
+            "{}  v{} (latest)",
+            "Already up to date.".green(),
+            current_version
+        );
+        skills::install_with_skills_cli(global_skills)?;
+        return Ok(());
+    }
+
+    println!(
+        "Updating  v{} → v{}",
+        current_version,
+        latest_version
+    );
+
+    let wanted = recommended_asset_names();
+    let bin_name = wanted.iter().find(|n| !n.ends_with(".sha256")).copied();
+    let sha_name = wanted.iter().find(|n| n.ends_with(".sha256")).copied();
+
+    let bin_name = bin_name.ok_or_else(|| anyhow::anyhow!("no binary asset for current platform"))?;
+    let sha_name = sha_name.ok_or_else(|| anyhow::anyhow!("no sha256 asset for current platform"))?;
+
+    let bin_url = release
+        .assets
+        .iter()
+        .find(|a| a.name == bin_name)
+        .map(|a| &a.browser_download_url)
+        .ok_or_else(|| anyhow::anyhow!("asset not found: {}", bin_name))?;
+
+    let sha_url = release
+        .assets
+        .iter()
+        .find(|a| a.name == sha_name)
+        .map(|a| &a.browser_download_url)
+        .ok_or_else(|| anyhow::anyhow!("asset not found: {}", sha_name))?;
+
+    println!("Downloading {} ...", bin_name);
+    let bin_bytes = download_bytes(bin_url).await?;
+
+    println!("Downloading {} ...", sha_name);
+    let sha_bytes = download_bytes(sha_url).await?;
+    let expected_sha = String::from_utf8_lossy(&sha_bytes)
+        .trim()
+        .to_ascii_lowercase();
+
+    let actual_sha = {
+        let mut hasher = Sha256::new();
+        hasher.update(&bin_bytes);
+        hex::encode(hasher.finalize())
+    };
+
+    if actual_sha != expected_sha {
+        anyhow::bail!(
+            "Checksum mismatch\n  expected: {}\n  got:      {}",
+            expected_sha,
+            actual_sha
+        );
+    }
+    println!("{}", "Checksum verified.".green());
+
+    let new_binary = if bin_name.ends_with(".zip") {
+        extract_from_zip(&bin_bytes)?
+    } else {
+        bin_bytes
+    };
+
+    let current_exe = std::env::current_exe()?;
+    replace_binary(&new_binary, &current_exe)?;
+
+    skills::install_with_skills_cli(global_skills)?;
+
+    println!();
+    println!("{}", "Update complete.".green().bold());
+    if cfg!(windows) {
+        println!(
+            "The new binary will be applied when this process exits. \
+             Please restart your terminal."
+        );
+    }
+    Ok(())
+}
+
+fn extract_from_zip(zip_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let cursor = std::io::Cursor::new(zip_bytes);
+    let mut archive = zip::ZipArchive::new(cursor)?;
+    let exe_name = if cfg!(windows) { "biolab.exe" } else { "biolab" };
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let name = entry
+            .enclosed_name()
+            .and_then(|n| n.file_name().map(|f| f.to_string_lossy().to_string()));
+        if name.as_deref() == Some(exe_name) {
+            let mut buf = Vec::with_capacity(entry.size() as usize);
+            entry.read_to_end(&mut buf)?;
+            return Ok(buf);
+        }
+    }
+    anyhow::bail!("{} not found in zip archive", exe_name)
+}
+
+#[cfg(unix)]
+fn replace_binary(new_bytes: &[u8], current_path: &Path) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = current_path.with_extension("new");
+    std::fs::write(&tmp, new_bytes)?;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::rename(&tmp, current_path)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn replace_binary(new_bytes: &[u8], current_path: &Path) -> anyhow::Result<()> {
+    let tmp = current_path.with_extension("new");
+    std::fs::write(&tmp, new_bytes)?;
+
+    let script_path = current_path.with_extension("update.bat");
+    let script = format!(
+        "@echo off\r\n\
+         ping 127.0.0.1 -n 3 > nul\r\n\
+         move /y \"{}\" \"{}\" > nul 2>&1\r\n\
+         del \"{}\" > nul 2>&1\r\n\
+         del \"%0\"\r\n",
+        tmp.display(),
+        current_path.display(),
+        tmp.display()
+    );
+    std::fs::write(&script_path, script)?;
+
+    std::process::Command::new("cmd.exe")
+        .args(["/C", "start", "/B", script_path.to_str().unwrap()])
+        .spawn()?;
+
+    Ok(())
+}
+
+async fn download_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
+    let resp = reqwest::Client::new()
+        .get(url)
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(resp.bytes().await?.to_vec())
 }
 
 fn print_update_report(report: &UpdateReport, format: &OutputFormat) {

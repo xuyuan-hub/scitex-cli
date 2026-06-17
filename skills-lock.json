@@ -23,7 +23,7 @@
       "source": "xuyuan-hub/biolab-cli",
       "sourceType": "github",
       "skillPath": "skills/biolab-inventory/SKILL.md",
-      "computedHash": "6f3bd195b5485de675c33fbfb2021efe8273bab05068693936e579c8aa9f3252"
+      "computedHash": "938746c4054f213c82080f7a08c4114a6daf70f1eefd342bcc9bd8e9e6a7c070"
     },
     "biolab-lab": {
       "source": "xuyuan-hub/biolab-cli",
@@ -59,7 +59,7 @@
       "source": "xuyuan-hub/biolab-cli",
       "sourceType": "github",
       "skillPath": "skills/biolab-task/SKILL.md",
-      "computedHash": "b0c42709223b3566ad2517593855e39fc9a7e193fab0645bb24743415768a4f3"
+      "computedHash": "2ce6d6dc94f5e4b117fae8aa0dad554f7cef3267c57db2a03684c455ed8dbd6e"
     },
     "biolab-templates": {
       "source": "xuyuan-hub/biolab-cli",

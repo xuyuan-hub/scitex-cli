@@ -77,7 +77,7 @@ pub fn run(args: &SkillsArgs, format: &OutputFormat) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn install_with_skills_cli(global: bool) -> anyhow::Result<()> {
+pub fn install_with_skills_cli(global: bool) -> anyhow::Result<()> {
     let mut command = Command::new(npx_bin());
     command.args(["-y", "skills", "add", SKILLS_REPO, "-y"]);
     if global {
