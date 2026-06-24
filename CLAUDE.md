@@ -104,7 +104,7 @@ src/
 - **Errors**: `ScientexError` in `src/errors.rs` (not `error.rs` — avoids collision with `std::error`)
 - **Output modes**: `-f json` for machine-readable, default text for human (colored status badges)
 - **Agent skills**: `scitex skills install` delegates to `npx skills add xuyuan-hub/scitex-cli`, so supported agents refresh their own skill indexes.
-- **Tests**: `cargo test` must pass before every submission — CI gate enforces this (23 unit tests across api_response, services, types)
+- **Tests**: `cargo test` must pass before every submission — CI gate enforces this (130 unit tests + 21 OpenAPI contract tests; see `tests/openapi_contract.rs`)
 
 ### API Base URL
 
@@ -181,5 +181,18 @@ Other docs:
 - macOS (arm64)
 
 `cargo test` runs before build — all tests must pass.
+
+## OpenAPI Contract Tests
+
+`tests/openapi_contract.rs` checks that CLI enum values and API paths stay aligned with the backend's OpenAPI spec. The fixture `tests/fixtures/openapi.json` is a pinned snapshot of `http://8.136.56.203/api/v1/openapi.json`.
+
+When the backend changes its API, refresh the fixture:
+
+```bash
+curl http://8.136.56.203/api/v1/openapi.json -o tests/fixtures/openapi.json
+# or: cargo test --test openapi_contract refresh_openapi_fixture -- --ignored
+```
+
+Then run `cargo test` — if a CLI enum value or path no longer matches the backend, the relevant test will fail.
 
 Tagged pushes (e.g. `v0.1.0`) auto-create GitHub Releases with binaries.

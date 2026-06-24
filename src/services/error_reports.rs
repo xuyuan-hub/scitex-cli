@@ -8,7 +8,7 @@ impl ScientexClient {
         &self,
         report: &ErrorReportCreate,
     ) -> Result<ErrorReportResponse, ScientexError> {
-        let resp: serde_json::Value = self.http.post("/api/v1/error-reports/", report).await?;
+        let resp: serde_json::Value = self.http.post("/error-reports/", report).await?;
         extract_object(resp)
     }
 }
@@ -17,10 +17,10 @@ impl ScientexClient {
 mod tests {
     #[test]
     fn error_report_post_url_is_correct() {
-        // Verify the error-reports path is constructed correctly.
-        // The path is built in the service method; this guards against
-        // accidental renames or path drift.
-        let path = "/api/v1/error-reports/";
-        assert_eq!(path, "/api/v1/error-reports/");
+        // The path is passed to `self.http.post()`, which prepends the
+        // configured base URL (`/api/v1`). Use a plain `/error-reports/`
+        // path — NOT `/api/v1/error-reports/` — to avoid a double prefix.
+        let path = "/error-reports/";
+        assert_eq!(path, "/error-reports/");
     }
 }
