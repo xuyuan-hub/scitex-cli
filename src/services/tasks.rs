@@ -1,4 +1,6 @@
-use crate::api_response::{envelope_data, extract_object, extract_paginated, PaginatedList};
+use crate::api_response::{
+    envelope_data, extract_array, extract_object, extract_paginated, PaginatedList,
+};
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
 use crate::services::{path_segment_encode, url_encode};
@@ -285,6 +287,72 @@ impl ScientexClient {
             .download_bytes(&staff_task_document_download_path(document_id))
             .await
     }
+
+    // --- Admin task document operations (POST/GET/DELETE /tasks/{id}/documents) ---
+
+    /// POST /tasks/{task_id}/documents — upload a document to a task (admin).
+    pub async fn upload_task_document(
+        &self,
+        task_id: &str,
+        file_path: &str,
+        document_type: &str,
+        visibility: Option<&str>,
+        part_id: Option<&str>,
+    ) -> Result<TaskDocument, ScientexError> {
+        let mut fields: Vec<(&str, &str)> = vec![("document_type", document_type)];
+        if let Some(vis) = visibility {
+            fields.push(("visibility", vis));
+        }
+        let path = task_documents_path(task_id);
+        let resp: serde_json::Value = self
+            .http
+            .upload_multipart(&path, file_path, &fields, &[])
+            .await?;
+        let mut doc: TaskDocument = extract_object(resp)?;
+        // If part_id was specified, the upload endpoint may not accept it as a
+        // multipart field; fall back to a PATCH after creation.
+        if let Some(pid) = part_id {
+            if doc.part_id.as_deref() != Some(pid) {
+                let patch_body = serde_json::json!({ "part_id": pid });
+                let patched: serde_json::Value = self
+                    .http
+                    .patch(&task_document_path(task_id, &doc.id), &patch_body)
+                    .await?;
+                doc = extract_object(patched)?;
+            }
+        }
+        Ok(doc)
+    }
+
+    /// GET /tasks/{task_id}/documents — list documents for a task (admin).
+    pub async fn list_task_documents(
+        &self,
+        task_id: &str,
+    ) -> Result<PaginatedList<TaskDocument>, ScientexError> {
+        let path = task_documents_path(task_id);
+        let resp: serde_json::Value = self.http.get(&path).await?;
+        extract_paginated(resp)
+    }
+
+    /// DELETE /tasks/{task_id}/documents/{document_id} — delete a task document (admin).
+    pub async fn delete_task_document(
+        &self,
+        task_id: &str,
+        document_id: &str,
+    ) -> Result<(), ScientexError> {
+        let path = task_document_path(task_id, document_id);
+        self.http.delete_empty(&path).await
+    }
+
+    /// GET /task-types/{type_id}/feedback — list document feedback for a task type (task_manager).
+    pub async fn list_task_type_feedback(
+        &self,
+        task_type_id: &str,
+    ) -> Result<Vec<TaskResult>, ScientexError> {
+        let path = task_type_feedback_path(task_type_id);
+        let resp: serde_json::Value = self.http.get(&path).await?;
+        extract_array(resp)
+    }
 }
 
 fn tasks_path() -> &'static str {
@@ -385,6 +453,22 @@ fn task_upload_field_path(task_id: &str) -> String {
     format!("/tasks/{}/upload-field", path_segment_encode(task_id))
 }
 
+fn task_documents_path(task_id: &str) -> String {
+    format!("{}/documents", task_path(task_id))
+}
+
+fn task_document_path(task_id: &str, document_id: &str) -> String {
+    format!(
+        "{}/{}",
+        task_documents_path(task_id),
+        path_segment_encode(document_id)
+    )
+}
+
+fn task_type_feedback_path(task_type_id: &str) -> String {
+    format!("{}/feedback", task_type_path(task_type_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,6 +503,18 @@ mod tests {
         assert_eq!(task_path("task 1"), "/tasks/task%201");
         assert_eq!(task_workflow_path("task 1"), "/tasks/task%201/workflow");
         assert_eq!(task_type_path("type 1"), "/task-types/type%201");
+        assert_eq!(
+            task_documents_path("task 1"),
+            "/tasks/task%201/documents"
+        );
+        assert_eq!(
+            task_document_path("task 1", "doc 1"),
+            "/tasks/task%201/documents/doc%201"
+        );
+        assert_eq!(
+            task_type_feedback_path("type 1"),
+            "/task-types/type%201/feedback"
+        );
         assert_eq!(
             task_types_path(0, 100, None, None),
             "/task-types?skip=0&limit=100"

@@ -1,5 +1,6 @@
 mod admin;
 mod error_reports;
+mod feishu;
 mod inventory;
 mod lab;
 mod orders;

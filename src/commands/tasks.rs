@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::{Args, Subcommand, ValueEnum};
+use colored::Colorize;
 use serde::Serialize;
 
 use crate::client::ScientexClient;
@@ -15,7 +16,8 @@ use crate::output::{
     unique_output_path as unique_download_path, OutputFormat,
 };
 use crate::types::{
-    StaffAssignmentItem, Task, TaskPart, TaskResult, TaskSummary, TaskType, WorkflowDetail,
+    StaffAssignmentItem, Task, TaskDocument, TaskPart, TaskResult, TaskSummary, TaskType,
+    WorkflowDetail,
 };
 
 #[derive(Args)]
@@ -134,7 +136,13 @@ pub enum MyTasksCommand {
         status: AssignmentStatusArg,
     },
     /// Submit a result for my assignment from a JSON file.
-    SubmitResult { assignment_id: String, file: String },
+    SubmitResult {
+        assignment_id: String,
+        file: String,
+        /// Optional JSON file with document_feedback (SOP/work_order feedback).
+        #[arg(long, value_name = "FILE")]
+        feedback: Option<String>,
+    },
     /// List staff-visible documents for a task.
     Documents { task_id: String },
     /// Download a staff-visible task document.
@@ -267,7 +275,7 @@ pub async fn run(
                 .await?;
             match format {
                 OutputFormat::Json => print_result(&documents, format),
-                OutputFormat::Text => print_paginated_items(&documents),
+                OutputFormat::Text => print_task_documents_text(&documents.items),
             }
         }
         TasksCommand::DownloadDocument {
@@ -352,8 +360,17 @@ async fn run_my_tasks(
         MyTasksCommand::SubmitResult {
             assignment_id,
             file,
+            feedback,
         } => {
-            let data = read_json_file(file)?;
+            let mut data = read_json_file(file)?;
+            if let Some(feedback_path) = feedback {
+                let feedback_data = read_json_file(feedback_path)?;
+                if let Some(obj) = data.as_object_mut() {
+                    obj.insert("document_feedback".to_string(), feedback_data);
+                } else {
+                    anyhow::bail!("Result JSON file must contain a JSON object");
+                }
+            }
             let result = client.submit_my_task_result(assignment_id, &data).await?;
             print_result(&result, format);
         }
@@ -361,7 +378,7 @@ async fn run_my_tasks(
             let documents = client.list_my_task_documents(task_id).await?;
             match format {
                 OutputFormat::Json => print_result(&documents, format),
-                OutputFormat::Text => print_paginated_items(&documents),
+                OutputFormat::Text => print_task_documents_text(&documents.items),
             }
         }
         MyTasksCommand::DownloadDocument {
@@ -379,6 +396,49 @@ async fn run_my_tasks(
 fn read_json_file(path: &str) -> anyhow::Result<serde_json::Value> {
     let content = std::fs::read_to_string(path)?;
     Ok(serde_json::from_str(&content)?)
+}
+
+fn print_task_documents_text(docs: &[TaskDocument]) {
+    if docs.is_empty() {
+        println!("No documents for this task");
+        return;
+    }
+    println!("Task documents:");
+    for doc in docs {
+        let sync_badge = feishu_sync_badge(doc.feishu_sync_status.as_deref());
+        let source_info = doc
+            .source_type_document_id
+            .as_deref()
+            .map(|id| format!("  source_template={}", &id[..8.min(id.len())]))
+            .unwrap_or_default();
+        println!(
+            "  {}  {}  {}  {}  vis={}  feishu={}{}",
+            doc.id,
+            doc.document_type,
+            doc.filename,
+            doc.file_size,
+            doc.visibility,
+            sync_badge,
+            source_info,
+        );
+        if let Some(url) = &doc.feishu_doc_url {
+            println!("    feishu_url: {url}");
+        }
+        if let Some(url) = &doc.scientex_link_url {
+            println!("    scientex_link: {url}");
+        }
+    }
+}
+
+fn feishu_sync_badge(status: Option<&str>) -> String {
+    match status {
+        Some("synced") => "✓ synced".green().to_string(),
+        Some("pending") => "◌ pending".yellow().to_string(),
+        Some("failed") => "✗ failed".red().to_string(),
+        Some("skipped") => "⊘ skipped".dimmed().to_string(),
+        Some(other) => format!("? {other}"),
+        None => "—".dimmed().to_string(),
+    }
 }
 
 fn normalize_task_create_payload(data: &mut serde_json::Value) -> anyhow::Result<()> {
@@ -1593,10 +1653,12 @@ mod tests {
                     MyTasksCommand::SubmitResult {
                         assignment_id,
                         file,
+                        feedback,
                     },
             } => {
                 assert_eq!(assignment_id, "assignment-1");
                 assert_eq!(file, "result.json");
+                assert!(feedback.is_none());
             }
             _ => panic!("expected submit result command"),
         }

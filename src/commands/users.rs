@@ -5,6 +5,7 @@ use clap::{Args, Subcommand};
 use crate::client::ScientexClient;
 use crate::config::Config;
 use crate::output::{print_result, OutputFormat};
+use crate::types::FeishuUserSettingsUpdate;
 
 #[derive(Args)]
 pub struct MeArgs {
@@ -29,6 +30,21 @@ pub enum MeCommand {
         #[arg(long)]
         new: String,
     },
+    /// 查看或更新飞书云文档设置
+    FeishuSettings {
+        #[command(subcommand)]
+        command: Option<FeishuSettingsCommand>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FeishuSettingsCommand {
+    /// 更新飞书云文档目标文件夹 token
+    Update {
+        /// 飞书云文档目标文件夹 token
+        #[arg(long)]
+        docs_folder_token: Option<String>,
+    },
 }
 
 pub async fn run(args: &MeArgs, config: &Arc<Config>, format: &OutputFormat) -> anyhow::Result<()> {
@@ -48,6 +64,19 @@ pub async fn run(args: &MeArgs, config: &Arc<Config>, format: &OutputFormat) -> 
             let result = client.change_password(current, new).await?;
             print_result(&result, format);
         }
+        Some(MeCommand::FeishuSettings { command }) => match command {
+            None => {
+                let settings = client.get_feishu_settings().await?;
+                print_result(&settings, format);
+            }
+            Some(FeishuSettingsCommand::Update { docs_folder_token }) => {
+                let update = FeishuUserSettingsUpdate {
+                    docs_folder_token: docs_folder_token.clone(),
+                };
+                let settings = client.update_feishu_settings(&update).await?;
+                print_result(&settings, format);
+            }
+        },
     }
     Ok(())
 }

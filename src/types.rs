@@ -517,6 +517,39 @@ pub struct TaskTypeDocument {
     pub content_type: String,
     pub file_size: u64,
     pub created_at: String,
+    #[serde(default)]
+    pub feishu_doc_url: Option<String>,
+    #[serde(default)]
+    pub feishu_doc_token: Option<String>,
+    #[serde(default)]
+    pub feishu_sync_status: Option<String>,
+    #[serde(default)]
+    pub scientex_link_url: Option<String>,
+}
+
+/// Public view of the current user's Feishu (Lark) settings.
+/// Token fields (access_token / refresh_token) are never returned by GET.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeishuUserSettingsPublic {
+    #[serde(default)]
+    pub open_id: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub mobile: Option<String>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub docs_folder_token: Option<String>,
+}
+
+/// Update payload for PATCH /feishu/settings. All fields are optional.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FeishuUserSettingsUpdate {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub docs_folder_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -541,6 +574,16 @@ pub struct TaskDocument {
     pub created_at: String,
     #[serde(default)]
     pub part_id: Option<String>,
+    #[serde(default)]
+    pub source_type_document_id: Option<String>,
+    #[serde(default)]
+    pub feishu_doc_url: Option<String>,
+    #[serde(default)]
+    pub feishu_doc_token: Option<String>,
+    #[serde(default)]
+    pub feishu_sync_status: Option<String>,
+    #[serde(default)]
+    pub scientex_link_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -556,6 +599,8 @@ pub struct TaskResult {
     pub output_data: Option<serde_json::Value>,
     #[serde(default)]
     pub comment: Option<String>,
+    #[serde(default)]
+    pub document_feedback: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -675,6 +720,16 @@ pub struct StaffDocumentBrief {
     pub download_url: String,
     #[serde(default)]
     pub content_type: Option<String>,
+    #[serde(default)]
+    pub source_type_document_id: Option<String>,
+    #[serde(default)]
+    pub feishu_doc_url: Option<String>,
+    #[serde(default)]
+    pub feishu_doc_token: Option<String>,
+    #[serde(default)]
+    pub feishu_sync_status: Option<String>,
+    #[serde(default)]
+    pub scientex_link_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -990,5 +1045,112 @@ mod tests {
         .expect("staff binding without assignment_id should parse");
         assert_eq!(value.assignment_id, None);
         assert_eq!(value.user_id, "user-1");
+    }
+
+    // ---- Feishu document fields ----
+
+    #[test]
+    fn task_type_document_parses_feishu_fields() {
+        let value: TaskTypeDocument = serde_json::from_value(serde_json::json!({
+            "id": "doc-1",
+            "document_type": "sop",
+            "filename": "sop.md",
+            "content_type": "text/markdown",
+            "file_size": 1024,
+            "created_at": "2026-06-26T00:00:00Z",
+            "feishu_doc_url": "https://example.feishu.cn/docx/abc",
+            "feishu_doc_token": "abc",
+            "feishu_sync_status": "synced",
+            "scientex_link_url": "https://scientex.example.com/task-types/1"
+        }))
+        .expect("should parse task type document with feishu fields");
+        assert_eq!(value.feishu_doc_url.as_deref(), Some("https://example.feishu.cn/docx/abc"));
+        assert_eq!(value.feishu_doc_token.as_deref(), Some("abc"));
+        assert_eq!(value.feishu_sync_status.as_deref(), Some("synced"));
+        assert!(value.scientex_link_url.is_some());
+    }
+
+    #[test]
+    fn task_type_document_allows_missing_feishu_fields() {
+        let value: TaskTypeDocument = serde_json::from_value(serde_json::json!({
+            "id": "doc-1",
+            "document_type": "sop",
+            "filename": "sop.md",
+            "content_type": "text/markdown",
+            "file_size": 1024,
+            "created_at": "2026-06-26T00:00:00Z"
+        }))
+        .expect("should parse task type document without feishu fields");
+        assert_eq!(value.feishu_doc_url, None);
+        assert_eq!(value.feishu_sync_status, None);
+    }
+
+    #[test]
+    fn task_document_parses_feishu_and_source_fields() {
+        let value: TaskDocument = serde_json::from_value(serde_json::json!({
+            "id": "tdoc-1",
+            "task_id": "task-1",
+            "document_type": "work_order",
+            "visibility": "lab_and_staff",
+            "filename": "wo.md",
+            "content_type": "text/markdown",
+            "file_size": 512,
+            "created_at": "2026-06-26T00:00:00Z",
+            "part_id": "part-1",
+            "source_type_document_id": "template-doc-1",
+            "feishu_doc_url": "https://example.feishu.cn/docx/def",
+            "feishu_sync_status": "pending"
+        }))
+        .expect("should parse task document with feishu fields");
+        assert_eq!(value.source_type_document_id.as_deref(), Some("template-doc-1"));
+        assert_eq!(value.feishu_sync_status.as_deref(), Some("pending"));
+    }
+
+    #[test]
+    fn task_result_parses_document_feedback() {
+        let value: TaskResult = serde_json::from_value(serde_json::json!({
+            "id": "result-1",
+            "task_id": "task-1",
+            "part_id": "part-1",
+            "submitted_by_id": "user-1",
+            "created_at": "2026-06-26T00:00:00Z",
+            "document_feedback": {
+                "items": [{
+                    "target_document_type": "sop",
+                    "feedback_text": "Step 3 has wrong volume"
+                }]
+            }
+        }))
+        .expect("should parse task result with document_feedback");
+        let fb = value.document_feedback.expect("feedback should be present");
+        assert!(fb.get("items").is_some());
+    }
+
+    #[test]
+    fn task_result_allows_missing_document_feedback() {
+        let value: TaskResult = serde_json::from_value(serde_json::json!({
+            "id": "result-1",
+            "task_id": "task-1",
+            "part_id": "part-1",
+            "submitted_by_id": "user-1",
+            "created_at": "2026-06-26T00:00:00Z"
+        }))
+        .expect("should parse task result without feedback");
+        assert_eq!(value.document_feedback, None);
+    }
+
+    #[test]
+    fn staff_document_brief_parses_feishu_fields() {
+        let value: StaffDocumentBrief = serde_json::from_value(serde_json::json!({
+            "id": "doc-1",
+            "filename": "sop.md",
+            "document_type": "sop",
+            "download_url": "/download/1",
+            "feishu_doc_url": "https://example.feishu.cn/docx/abc",
+            "feishu_sync_status": "synced"
+        }))
+        .expect("should parse staff document brief with feishu fields");
+        assert_eq!(value.feishu_doc_url.as_deref(), Some("https://example.feishu.cn/docx/abc"));
+        assert_eq!(value.feishu_sync_status.as_deref(), Some("synced"));
     }
 }

@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use clap::{Args, Subcommand};
+use colored::Colorize;
 use serde::Serialize;
 
 use crate::client::ScientexClient;
 use crate::config::Config;
 use crate::errors::ScientexError;
 use crate::output::{print_result, OutputFormat};
-use crate::types::StaffUserInfo;
+use crate::types::{StaffUserInfo, TaskResult, TaskTypeDocument};
 
 #[derive(Args)]
 pub struct AdminArgs {
@@ -70,6 +71,12 @@ pub enum AdminTaskTypesCommand {
     DeleteDoc {
         type_id: String,
         doc_id: String,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
+    /// List document feedback submitted by staff for a task type (task_manager only).
+    Feedback {
+        type_id: String,
         #[arg(long)]
         lab_id: Option<String>,
     },
@@ -138,8 +145,9 @@ pub async fn run(
                     .create_admin_task_type(&data, lab_id.as_deref())
                     .await
                     .map_err(admin_operation_error)?;
+                let mut uploaded_docs: Vec<TaskTypeDocument> = Vec::new();
                 if let Some(sop_path) = sop {
-                    client
+                    let doc = client
                         .upload_admin_task_type_document(
                             &task_type.id,
                             sop_path,
@@ -148,9 +156,10 @@ pub async fn run(
                         )
                         .await
                         .map_err(admin_operation_error)?;
+                    uploaded_docs.push(doc);
                 }
                 if let Some(wo_path) = work_order {
-                    client
+                    let doc = client
                         .upload_admin_task_type_document(
                             &task_type.id,
                             wo_path,
@@ -159,8 +168,31 @@ pub async fn run(
                         )
                         .await
                         .map_err(admin_operation_error)?;
+                    uploaded_docs.push(doc);
                 }
-                print_result(&task_type, format);
+                match format {
+                    OutputFormat::Json => {
+                        let combined = serde_json::json!({
+                            "task_type": task_type,
+                            "uploaded_documents": uploaded_docs,
+                        });
+                        print_result(&combined, format);
+                    }
+                    OutputFormat::Text => {
+                        println!("Created task type: {}", task_type.id);
+                        for doc in &uploaded_docs {
+                            let sync_badge =
+                                feishu_sync_badge(doc.feishu_sync_status.as_deref());
+                            println!(
+                                "  Uploaded {}: {}  feishu={}",
+                                doc.document_type, doc.filename, sync_badge,
+                            );
+                            if let Some(url) = &doc.feishu_doc_url {
+                                println!("    feishu_url: {url}");
+                            }
+                        }
+                    }
+                }
             }
             AdminTaskTypesCommand::Delete { id, lab_id } => {
                 client
@@ -182,7 +214,10 @@ pub async fn run(
                     .list_admin_task_type_documents(type_id, lab_id.as_deref())
                     .await
                     .map_err(admin_operation_error)?;
-                print_result(&docs, format);
+                match format {
+                    OutputFormat::Json => print_result(&docs, format),
+                    OutputFormat::Text => print_type_documents_text(&docs),
+                }
             }
             AdminTaskTypesCommand::UploadDoc {
                 type_id,
@@ -195,7 +230,20 @@ pub async fn run(
                     .upload_admin_task_type_document(type_id, file, doc_type, lab_id.as_deref())
                     .await
                     .map_err(admin_operation_error)?;
-                print_result(&doc, format);
+                match format {
+                    OutputFormat::Json => print_result(&doc, format),
+                    OutputFormat::Text => {
+                        let sync_badge =
+                            feishu_sync_badge(doc.feishu_sync_status.as_deref());
+                        println!(
+                            "Uploaded document: {}  type={}  feishu={}",
+                            doc.filename, doc.document_type, sync_badge,
+                        );
+                        if let Some(url) = &doc.feishu_doc_url {
+                            println!("  feishu_url: {url}");
+                        }
+                    }
+                }
             }
             AdminTaskTypesCommand::DeleteDoc {
                 type_id,
@@ -214,6 +262,16 @@ pub async fn run(
                     OutputFormat::Text => {
                         println!("Deleted document {doc_id} from task type {type_id}")
                     }
+                }
+            }
+            AdminTaskTypesCommand::Feedback { type_id, lab_id: _ } => {
+                let results = client
+                    .list_task_type_feedback(type_id)
+                    .await
+                    .map_err(admin_operation_error)?;
+                match format {
+                    OutputFormat::Json => print_result(&results, format),
+                    OutputFormat::Text => print_feedback_text(&results),
                 }
             }
         },
@@ -286,6 +344,84 @@ async fn run_task_type_staff(
     }
 
     Ok(())
+}
+
+fn print_type_documents_text(docs: &[TaskTypeDocument]) {
+    if docs.is_empty() {
+        println!("No documents for this task type");
+        return;
+    }
+    println!("Task type documents:");
+    for doc in docs {
+        let sync_badge = feishu_sync_badge(doc.feishu_sync_status.as_deref());
+        println!(
+            "  {}  {}  {}  {}  {}  feishu={}",
+            doc.id, doc.document_type, doc.filename, doc.content_type, doc.file_size, sync_badge,
+        );
+        if let Some(url) = &doc.feishu_doc_url {
+            println!("    feishu_url: {url}");
+        }
+        if let Some(url) = &doc.scientex_link_url {
+            println!("    scientex_link: {url}");
+        }
+    }
+}
+
+fn feishu_sync_badge(status: Option<&str>) -> String {
+    match status {
+        Some("synced") => "✓ synced".green().to_string(),
+        Some("pending") => "◌ pending".yellow().to_string(),
+        Some("failed") => "✗ failed".red().to_string(),
+        Some("skipped") => "⊘ skipped".dimmed().to_string(),
+        Some(other) => format!("? {other}"),
+        None => "—".dimmed().to_string(),
+    }
+}
+
+fn print_feedback_text(results: &[TaskResult]) {
+    if results.is_empty() {
+        println!("No document feedback for this task type");
+        return;
+    }
+    println!("Document feedback ({} results with feedback):", results.len());
+    for result in results {
+        let feedback = match &result.document_feedback {
+            Some(fb) => fb,
+            None => continue,
+        };
+        println!(
+            "  result={}  task={}  part={}  submitted_by={}",
+            result.id, result.task_id, result.part_id, result.submitted_by_id,
+        );
+        if let Some(items) = feedback.get("items").and_then(|v| v.as_array()) {
+            for (i, item) in items.iter().enumerate() {
+                let target = item
+                    .get("target_document_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                let text = item
+                    .get("feedback_text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let modified_url = item
+                    .get("modified_feishu_doc_url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                println!(
+                    "    #{}  target={}  feedback={}",
+                    i + 1,
+                    target,
+                    text,
+                );
+                if !modified_url.is_empty() {
+                    println!("      modified_doc: {modified_url}");
+                }
+            }
+        } else {
+            // Fallback: show raw feedback JSON
+            println!("    feedback: {feedback}");
+        }
+    }
 }
 
 fn print_staff_list(staff: &Vec<StaffUserInfo>, format: &OutputFormat) {
@@ -820,6 +956,41 @@ mod tests {
                 assert_eq!(lab_id.as_deref(), Some("lab-1"));
             }
             _ => panic!("expected delete-doc command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_type_feedback() {
+        let args = parse_admin(&["admin", "task-types", "feedback", "type-1"]);
+        match args.command {
+            AdminCommand::TaskTypes {
+                command: AdminTaskTypesCommand::Feedback { type_id, lab_id },
+            } => {
+                assert_eq!(type_id, "type-1");
+                assert!(lab_id.is_none());
+            }
+            _ => panic!("expected feedback command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_type_feedback_with_lab_id() {
+        let args = parse_admin(&[
+            "admin",
+            "task-types",
+            "feedback",
+            "type-1",
+            "--lab-id",
+            "lab-1",
+        ]);
+        match args.command {
+            AdminCommand::TaskTypes {
+                command: AdminTaskTypesCommand::Feedback { type_id, lab_id },
+            } => {
+                assert_eq!(type_id, "type-1");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected feedback command"),
         }
     }
 

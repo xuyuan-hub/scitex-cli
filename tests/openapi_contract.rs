@@ -465,6 +465,35 @@ fn cli_user_paths_exist_in_openapi() {
 }
 
 #[test]
+fn cli_feishu_paths_exist_in_openapi() {
+    let doc = load_openapi();
+    let paths = openapi_paths(&doc);
+    let expected = [
+        "/feishu/settings",
+        "/feishu/authorize",
+        "/feishu/callback",
+        "/feishu/login",
+        "/feishu/status",
+    ];
+    for path in expected {
+        assert!(
+            paths.contains(path),
+            "CLI feishu path `{path}` not found in OpenAPI"
+        );
+    }
+}
+
+#[test]
+fn cli_task_type_feedback_path_exists_in_openapi() {
+    let doc = load_openapi();
+    let paths = openapi_paths(&doc);
+    assert!(
+        paths.contains("/task-types/{id}/feedback"),
+        "CLI task-type feedback path `/task-types/{{id}}/feedback` not found in OpenAPI"
+    );
+}
+
+#[test]
 fn cli_project_paths_exist_in_openapi() {
     let doc = load_openapi();
     let paths = openapi_paths(&doc);
