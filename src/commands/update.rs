@@ -200,23 +200,23 @@ async fn install_latest(global_skills: bool) -> anyhow::Result<()> {
 fn extract_from_zip(zip_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     let cursor = std::io::Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(cursor)?;
-    let exe_name = if cfg!(windows) {
-        "scitex.exe"
-    } else {
-        "scitex"
-    };
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry
             .enclosed_name()
             .and_then(|n| n.file_name().map(|f| f.to_string_lossy().to_string()));
-        if name.as_deref() == Some(exe_name) {
+        let is_match = if cfg!(windows) {
+            name.as_deref().is_some_and(|n| n.ends_with(".exe"))
+        } else {
+            name.as_deref() == Some("scitex")
+        };
+        if is_match {
             let mut buf = Vec::with_capacity(entry.size() as usize);
             entry.read_to_end(&mut buf)?;
             return Ok(buf);
         }
     }
-    anyhow::bail!("{} not found in zip archive", exe_name)
+    anyhow::bail!("no executable found in zip archive")
 }
 
 #[cfg(unix)]
