@@ -21,6 +21,10 @@ Examples:
 - `把这个任务类型绑定给某个员工`
 - `让这个员工可以处理 sample_qc 任务类型`
 - `移除某个员工和任务类型的绑定`
+- `给这个任务类型上传 SOP 文件`
+- `上传工单模板到任务类型`
+- `查看任务类型的文档列表`
+- `删除任务类型上挂的某个文档`
 
 Do not use this skill for creating executable task instances. For actual task execution, read `../scitex-task/SKILL.md` and use `scitex tasks create` or `scitex tasks create-workflow`.
 
@@ -31,8 +35,17 @@ Before API calls, read `../scitex-shared/SKILL.md`.
 Use the top-level admin command group:
 
 ```bash
-scitex admin task-types create <task_type.json>
+# Task type lifecycle
+scitex admin task-types create <task_type.json> [--sop <file>] [--work-order <file>]
 scitex admin task-types delete <TASK_TYPE_ID>
+
+# Document management (SOP, work order, attachment)
+scitex admin task-types upload-doc <TYPE_ID> <FILE> --doc-type sop|work_order|attachment
+scitex admin task-types list-docs <TYPE_ID>
+scitex admin task-types delete-doc <TYPE_ID> <DOC_ID>
+scitex admin task-types feedback <TYPE_ID>
+
+# Staff binding
 scitex admin task-types staff list <TASK_TYPE_ID>
 scitex admin task-types staff add <TASK_TYPE_ID> <USER_ID>
 scitex admin task-types staff remove <TASK_TYPE_ID> <USER_ID>
@@ -137,13 +150,66 @@ If `required` is present, every required field should exist in `properties`.
 2. Prefer stable lowercase snake_case keys for `key` and schema property names.
 3. Include only fields supported by the OpenAPI schema.
 4. Save the payload as a temporary JSON file.
-5. Run:
+5. If the user provides SOP or work order content, write those to separate files now.
+6. Run create with inline document flags when files are ready:
 
 ```bash
+# Create with SOP and work order in one step
+scitex admin task-types create <task_type.json> --sop <sop_file> --work-order <wo_file> -f json
+
+# Or create first, then upload documents separately
 scitex admin task-types create <task_type.json> -f json
+scitex admin task-types upload-doc <TYPE_ID> <sop_file> --doc-type sop -f json
+scitex admin task-types upload-doc <TYPE_ID> <wo_file> --doc-type work_order -f json
 ```
 
-6. Report the created task type id, key, display name, and category.
+7. Report the created task type id, key, display name, category, and any uploaded document ids.
+
+**When to upload documents:** Always upload an SOP when the task type represents a procedure with steps, safety rules, or inspection checklists. Always upload a work order template when the task type requires staff to fill out a structured daily/per-run record. Do not leave `documents: []` if the user provided procedure content.
+
+## Document Management
+
+Task type documents are files (SOP, work order template, or attachment) stored permanently on the task type catalog entry. Staff members see them when working on task instances of this type.
+
+Document types accepted by the backend (`TaskDocumentType` enum):
+- `sop` — Standard operating procedure, steps, safety rules
+- `work_order` — Per-run or daily record template staff fill out
+- `attachment` — Any supplementary reference file
+- `result_attachment` — Output reference (not supported by `upload-doc`; attached at result submission)
+
+### Upload
+
+```bash
+scitex admin task-types upload-doc <TYPE_ID> <FILE> --doc-type sop -f json
+scitex admin task-types upload-doc <TYPE_ID> <FILE> --doc-type work_order -f json
+scitex admin task-types upload-doc <TYPE_ID> <FILE> --doc-type attachment -f json
+```
+
+Accepted file formats: Markdown (`.md`), PDF (`.pdf`), Word (`.docx`), plain text, or any binary.
+
+The response includes `feishu_doc_url` and `feishu_sync_status` — when `feishu_sync_status` is `synced`, the document is also accessible in Feishu.
+
+### List
+
+```bash
+scitex admin task-types list-docs <TYPE_ID> -f json
+```
+
+Use this to verify uploads or to retrieve doc IDs before deletion.
+
+### Delete
+
+```bash
+scitex admin task-types delete-doc <TYPE_ID> <DOC_ID>
+```
+
+### Feedback
+
+Staff can submit feedback on documents (e.g. corrections to an SOP) when completing a task. View feedback with:
+
+```bash
+scitex admin task-types feedback <TYPE_ID> -f json
+```
 
 ## Deletion
 
@@ -168,6 +234,9 @@ After creation, summarize:
 - display name
 - category
 - any required input fields
+- uploaded documents (id, document_type, filename, feishu_sync_status) — report these even when using `--sop`/`--work-order` inline flags, as the combined JSON response includes an `uploaded_documents` array
+
+For a standalone `upload-doc`, report: doc id, document_type, filename, feishu_sync_status, and feishu_doc_url if present.
 
 For deletion, report the deleted task type id.
 
