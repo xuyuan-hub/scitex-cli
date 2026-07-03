@@ -181,8 +181,7 @@ pub async fn run(
                     OutputFormat::Text => {
                         println!("Created task type: {}", task_type.id);
                         for doc in &uploaded_docs {
-                            let sync_badge =
-                                feishu_sync_badge(doc.feishu_sync_status.as_deref());
+                            let sync_badge = feishu_sync_badge(doc.feishu_sync_status.as_deref());
                             println!(
                                 "  Uploaded {}: {}  feishu={}",
                                 doc.document_type, doc.filename, sync_badge,
@@ -233,8 +232,7 @@ pub async fn run(
                 match format {
                     OutputFormat::Json => print_result(&doc, format),
                     OutputFormat::Text => {
-                        let sync_badge =
-                            feishu_sync_badge(doc.feishu_sync_status.as_deref());
+                        let sync_badge = feishu_sync_badge(doc.feishu_sync_status.as_deref());
                         println!(
                             "Uploaded document: {}  type={}  feishu={}",
                             doc.filename, doc.document_type, sync_badge,
@@ -383,7 +381,10 @@ fn print_feedback_text(results: &[TaskResult]) {
         println!("No document feedback for this task type");
         return;
     }
-    println!("Document feedback ({} results with feedback):", results.len());
+    println!(
+        "Document feedback ({} results with feedback):",
+        results.len()
+    );
     for result in results {
         let feedback = match &result.document_feedback {
             Some(fb) => fb,
@@ -407,12 +408,7 @@ fn print_feedback_text(results: &[TaskResult]) {
                     .get("modified_feishu_doc_url")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                println!(
-                    "    #{}  target={}  feedback={}",
-                    i + 1,
-                    target,
-                    text,
-                );
+                println!("    #{}  target={}  feedback={}", i + 1, target, text,);
                 if !modified_url.is_empty() {
                     println!("      modified_doc: {modified_url}");
                 }

@@ -68,7 +68,9 @@ fn write_temp_sop_markdown(stamp: u128) -> TempFile {
 #[ignore = "requires SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 and Feishu-configured user"]
 async fn live_feishu_dual_link_task_type_sop() {
     if !live_enabled() {
-        eprintln!("set SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 to run the live Feishu dual-link smoke test");
+        eprintln!(
+            "set SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 to run the live Feishu dual-link smoke test"
+        );
         return;
     }
 
@@ -131,7 +133,10 @@ async fn live_feishu_dual_link_task_type_sop() {
         "feishu_sync_status should be 'synced' after SOP upload"
     );
     assert!(
-        uploaded.feishu_doc_url.as_deref().is_some_and(|u| !u.is_empty()),
+        uploaded
+            .feishu_doc_url
+            .as_deref()
+            .is_some_and(|u| !u.is_empty()),
         "feishu_doc_url should be populated after sync"
     );
     assert!(
@@ -175,7 +180,9 @@ async fn live_feishu_dual_link_task_type_sop() {
 #[ignore = "requires SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 and Feishu-configured user"]
 async fn live_feishu_settings_read_update_roundtrip() {
     if !live_enabled() {
-        eprintln!("set SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 to run the live Feishu settings roundtrip test");
+        eprintln!(
+            "set SCIENTEX_RUN_LIVE_FEISHU_TESTS=1 to run the live Feishu settings roundtrip test"
+        );
         return;
     }
 
@@ -187,7 +194,10 @@ async fn live_feishu_settings_read_update_roundtrip() {
         .get_feishu_settings()
         .await
         .expect("should read feishu settings");
-    eprintln!("before: open_id={:?}, folder={:?}", before.open_id, before.docs_folder_token);
+    eprintln!(
+        "before: open_id={:?}, folder={:?}",
+        before.open_id, before.docs_folder_token
+    );
 
     // Roundtrip: PATCH with the same docs_folder_token (or skip if none)
     let folder = match &before.docs_folder_token {
@@ -214,5 +224,8 @@ async fn live_feishu_settings_read_update_roundtrip() {
     // Token fields (access_token / refresh_token) must never be exposed
     // via the public settings response. We can't check them directly since
     // they aren't in the struct, but we verify the struct parses successfully.
-    eprintln!("after: open_id={:?}, folder={:?}", after.open_id, after.docs_folder_token);
+    eprintln!(
+        "after: open_id={:?}, folder={:?}",
+        after.open_id, after.docs_folder_token
+    );
 }

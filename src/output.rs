@@ -277,7 +277,7 @@ mod tests {
         );
     }
 
-    /// Verify that a list of Chinese germplasm records serializes correctly.
+    /// Verify that a list of records with Chinese characters serializes correctly.
     #[test]
     fn json_list_output_preserves_chinese_utf8() {
         let records = vec![

@@ -57,8 +57,8 @@ mod tests {
 
     #[test]
     fn feishu_settings_public_handles_missing_fields() {
-        let value: FeishuUserSettingsPublic = serde_json::from_value(json!({}))
-            .expect("should parse empty feishu settings");
+        let value: FeishuUserSettingsPublic =
+            serde_json::from_value(json!({})).expect("should parse empty feishu settings");
         assert_eq!(value.open_id, None);
         assert_eq!(value.docs_folder_token, None);
     }

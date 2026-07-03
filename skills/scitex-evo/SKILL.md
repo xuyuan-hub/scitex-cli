@@ -140,14 +140,12 @@ scitex tasks types --search exp2 -f json
 
 Required inputs normally include:
 
-- `plasmid`: file field, commonly `.dna`, `.gb`, `.fasta`, `.fa`
+- `plasmid`: file field (`.dna` / `.gb` / `.fasta` / `.fa`), typed as `string` in schema
 - `gene`
 - `aa_start`
 - `aa_end`
 
-Useful optional inputs include `output_dir`, `mode`, `max_oligos`, `target_tm`, `gpu`, `top_positions`, `top_mutations`, `max_variants`, `max_library_size`, `batch_size`, `seed`, and `use_mixture`; only include fields needed by the request or defaults you intentionally override.
-
-Example payload:
+Because `plasmid` is typed as `string` (not `format: file`), you **must** include a placeholder value in `input_data` to pass validation:
 
 ```json
 {
@@ -155,6 +153,7 @@ Example payload:
   "description": "Design degenerate DNA library and BsaI Golden Gate primers from CasY7 plasmid file.",
   "task_type_id": "<evo-design-exp2-primers id>",
   "input_data": {
+    "plasmid": "placeholder",
     "gene": "CasY7",
     "aa_start": 1,
     "aa_end": 47,
@@ -173,7 +172,7 @@ Create it:
 scitex tasks create task.json --file-field plasmid=data/evo/Y70001_CasY7_plasmid.dna -f json
 ```
 
-This is a GPU/long-running task. Confirm before starting if the user did not clearly ask to submit it.
+**Known limitation**: The server replaces the root task's `input_data.plasmid` with a `FileFieldRef`, but the part's `input_data.plasmid` keeps the `"placeholder"` string. The worker reads from the part's input_data and may fail. This is a backend bug — file references are not propagated from root task to parts during multipart creation.
 
 ## Results
 

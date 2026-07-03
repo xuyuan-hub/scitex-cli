@@ -32,7 +32,7 @@ Never assume the task type exists. Always check available task types first:
 scitex tasks types -f json
 ```
 
-Use query options when the request needs narrowing, similar to Tashan germplasm queries:
+Use query options when the request needs narrowing:
 
 ```bash
 scitex tasks types --search <keyword> --filters '<json_filter_array>' -f json

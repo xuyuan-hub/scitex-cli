@@ -1064,7 +1064,10 @@ mod tests {
             "scientex_link_url": "https://scientex.example.com/task-types/1"
         }))
         .expect("should parse task type document with feishu fields");
-        assert_eq!(value.feishu_doc_url.as_deref(), Some("https://example.feishu.cn/docx/abc"));
+        assert_eq!(
+            value.feishu_doc_url.as_deref(),
+            Some("https://example.feishu.cn/docx/abc")
+        );
         assert_eq!(value.feishu_doc_token.as_deref(), Some("abc"));
         assert_eq!(value.feishu_sync_status.as_deref(), Some("synced"));
         assert!(value.scientex_link_url.is_some());
@@ -1102,7 +1105,10 @@ mod tests {
             "feishu_sync_status": "pending"
         }))
         .expect("should parse task document with feishu fields");
-        assert_eq!(value.source_type_document_id.as_deref(), Some("template-doc-1"));
+        assert_eq!(
+            value.source_type_document_id.as_deref(),
+            Some("template-doc-1")
+        );
         assert_eq!(value.feishu_sync_status.as_deref(), Some("pending"));
     }
 
@@ -1150,7 +1156,10 @@ mod tests {
             "feishu_sync_status": "synced"
         }))
         .expect("should parse staff document brief with feishu fields");
-        assert_eq!(value.feishu_doc_url.as_deref(), Some("https://example.feishu.cn/docx/abc"));
+        assert_eq!(
+            value.feishu_doc_url.as_deref(),
+            Some("https://example.feishu.cn/docx/abc")
+        );
         assert_eq!(value.feishu_sync_status.as_deref(), Some("synced"));
     }
 }

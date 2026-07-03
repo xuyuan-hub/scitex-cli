@@ -503,10 +503,7 @@ mod tests {
         assert_eq!(task_path("task 1"), "/tasks/task%201");
         assert_eq!(task_workflow_path("task 1"), "/tasks/task%201/workflow");
         assert_eq!(task_type_path("type 1"), "/task-types/type%201");
-        assert_eq!(
-            task_documents_path("task 1"),
-            "/tasks/task%201/documents"
-        );
+        assert_eq!(task_documents_path("task 1"), "/tasks/task%201/documents");
         assert_eq!(
             task_document_path("task 1", "doc 1"),
             "/tasks/task%201/documents/doc%201"

@@ -251,7 +251,6 @@ mod tests {
     }
 
     /// Backend flat array format: { data: [...], count: N, current_page: ... }
-    /// This is the actual response from germplasm list API.
     #[test]
     fn extracts_flat_data_array_with_top_level_pagination() {
         let resp = serde_json::json!({
