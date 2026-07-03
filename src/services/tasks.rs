@@ -3,7 +3,7 @@ use crate::api_response::{
 };
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
-use crate::services::{path_segment_encode, url_encode};
+use crate::services::{empty_body, path_segment_encode, url_encode};
 use crate::types::{
     StaffAssignmentDetail, StaffAssignmentItem, Task, TaskDocument, TaskResult, TaskSummary,
     TaskType, WorkflowDetail,
@@ -122,6 +122,44 @@ impl ScientexClient {
             self.http.get(&path).await?
         };
         extract_paginated(resp)
+    }
+
+    pub async fn confirm_lab_task(
+        &self,
+        task_id: &str,
+        lab_id: Option<&str>,
+    ) -> Result<serde_json::Value, ScientexError> {
+        let path = lab_task_confirm_path(task_id);
+        let body = empty_body();
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .post_with_headers(&path, &body, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.post(&path, &body).await?
+        };
+        Ok(envelope_data(resp))
+    }
+
+    pub async fn reject_lab_task(
+        &self,
+        task_id: &str,
+        reason: Option<&str>,
+        lab_id: Option<&str>,
+    ) -> Result<serde_json::Value, ScientexError> {
+        let path = lab_task_reject_path(task_id);
+        let body = match reason {
+            Some(r) => serde_json::json!({ "reason": r }),
+            None => empty_body(),
+        };
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .post_with_headers(&path, &body, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.post(&path, &body).await?
+        };
+        Ok(envelope_data(resp))
     }
 
     pub async fn create_task(&self, data: &serde_json::Value) -> Result<Task, ScientexError> {
@@ -392,6 +430,14 @@ fn lab_task_path(task_id: &str) -> String {
     format!("/lab/tasks/{}", path_segment_encode(task_id))
 }
 
+fn lab_task_confirm_path(task_id: &str) -> String {
+    format!("{}/confirm", lab_task_path(task_id))
+}
+
+fn lab_task_reject_path(task_id: &str) -> String {
+    format!("{}/reject", lab_task_path(task_id))
+}
+
 fn lab_task_documents_path(task_id: &str) -> String {
     format!("{}/documents", lab_task_path(task_id))
 }
@@ -494,6 +540,14 @@ mod tests {
         assert_eq!(
             lab_task_results_path("task 1"),
             "/lab/tasks/task%201/results"
+        );
+        assert_eq!(
+            lab_task_confirm_path("task 1"),
+            "/lab/tasks/task%201/confirm"
+        );
+        assert_eq!(
+            lab_task_reject_path("task 1"),
+            "/lab/tasks/task%201/reject"
         );
     }
 

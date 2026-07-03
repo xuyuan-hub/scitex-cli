@@ -399,6 +399,8 @@ fn cli_lab_task_paths_exist_in_openapi() {
         "/lab/tasks",
         "/lab/tasks/task-types",
         "/lab/tasks/{id}",
+        "/lab/tasks/{id}/confirm",
+        "/lab/tasks/{id}/reject",
         "/lab/tasks/{id}/documents",
         "/lab/tasks/{id}/results",
         "/lab/tasks/{id}/upload-field",

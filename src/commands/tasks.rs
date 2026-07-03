@@ -112,6 +112,20 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
+    /// Confirm a task that is waiting for lab confirmation (waiting_lab_confirm → completed).
+    Confirm {
+        id: String,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
+    /// Reject a task that is waiting for lab confirmation (waiting_lab_confirm → in_progress).
+    Reject {
+        id: String,
+        #[arg(long)]
+        reason: Option<String>,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
     /// My assigned staff tasks.
     My {
         #[command(subcommand)]
@@ -324,6 +338,18 @@ pub async fn run(
             let workflow = get_task_workflow_if_available(&client, id).await?;
             download_task_result_files(&client, &task, workflow.as_ref(), output_dir.as_deref())
                 .await?;
+        }
+        TasksCommand::Confirm { id, lab_id } => {
+            let result = client
+                .confirm_lab_task(id, lab_id.as_deref())
+                .await?;
+            print_result(&result, format);
+        }
+        TasksCommand::Reject { id, reason, lab_id } => {
+            let result = client
+                .reject_lab_task(id, reason.as_deref(), lab_id.as_deref())
+                .await?;
+            print_result(&result, format);
         }
         TasksCommand::My { command } => run_my_tasks(&client, command, format).await?,
     }
@@ -1661,6 +1687,52 @@ mod tests {
                 assert!(feedback.is_none());
             }
             _ => panic!("expected submit result command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_confirm() {
+        let args = parse_tasks(&["tasks", "confirm", "task-1", "--lab-id", "lab-1"]);
+        match args.command {
+            TasksCommand::Confirm { id, lab_id } => {
+                assert_eq!(id, "task-1");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected task confirm command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_reject_with_reason() {
+        let args = parse_tasks(&[
+            "tasks",
+            "reject",
+            "task-1",
+            "--reason",
+            "incomplete results",
+            "--lab-id",
+            "lab-1",
+        ]);
+        match args.command {
+            TasksCommand::Reject { id, reason, lab_id } => {
+                assert_eq!(id, "task-1");
+                assert_eq!(reason.as_deref(), Some("incomplete results"));
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected task reject command"),
+        }
+    }
+
+    #[test]
+    fn parses_task_reject_without_reason() {
+        let args = parse_tasks(&["tasks", "reject", "task-2"]);
+        match args.command {
+            TasksCommand::Reject { id, reason, lab_id } => {
+                assert_eq!(id, "task-2");
+                assert!(reason.is_none());
+                assert!(lab_id.is_none());
+            }
+            _ => panic!("expected task reject command"),
         }
     }
 
