@@ -16,8 +16,7 @@
 use std::collections::HashSet;
 
 fn load_openapi() -> serde_json::Value {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/openapi.json");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/openapi.json");
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("failed to read OpenAPI fixture at {}: {e}", path.display()));
     serde_json::from_str(&content).expect("failed to parse OpenAPI fixture as JSON")
@@ -40,9 +39,7 @@ fn enum_values(doc: &serde_json::Value, name: &str) -> Vec<String> {
 /// - replace path parameters `{xxx}` with `{id}`
 fn normalize_path(path: &str) -> String {
     let path = path.split('?').next().unwrap_or(path);
-    let path = path
-        .strip_prefix("/api/v1")
-        .unwrap_or(path);
+    let path = path.strip_prefix("/api/v1").unwrap_or(path);
     let mut result = String::new();
     let mut in_brace = false;
     for ch in path.chars() {
@@ -69,6 +66,33 @@ fn openapi_paths(doc: &serde_json::Value) -> HashSet<String> {
         .unwrap_or_default()
 }
 
+fn openapi_operations(doc: &serde_json::Value) -> HashSet<(String, String)> {
+    let methods = ["get", "post", "put", "patch", "delete"];
+    let Some(paths) = doc.pointer("/paths").and_then(|v| v.as_object()) else {
+        return HashSet::new();
+    };
+    paths
+        .iter()
+        .flat_map(|(path, item)| {
+            let normalized = normalize_path(path);
+            methods.iter().filter_map(move |method| {
+                item.get(*method)
+                    .map(|_| (method.to_ascii_uppercase(), normalized.clone()))
+            })
+        })
+        .collect()
+}
+
+fn assert_operations_exist(doc: &serde_json::Value, expected: &[(&str, &str)]) {
+    let operations = openapi_operations(doc);
+    for (method, path) in expected {
+        assert!(
+            operations.contains(&((*method).to_string(), (*path).to_string())),
+            "CLI endpoint `{method} {path}` not found in OpenAPI"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Enum value tests
 // ---------------------------------------------------------------------------
@@ -91,8 +115,7 @@ fn cli_assignment_status_values_match_backend() {
 #[test]
 fn cli_task_type_category_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskTypeCategory").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskTypeCategory").into_iter().collect();
     for value in ["compute", "staff"] {
         assert!(
             backend.contains(value),
@@ -104,8 +127,7 @@ fn cli_task_type_category_values_match_backend() {
 #[test]
 fn cli_error_category_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "ErrorCategory").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "ErrorCategory").into_iter().collect();
     // These are the values ErrorCategory::Display produces, which is what
     // gets serialized into the JSON body via #[serde(rename_all = "snake_case")].
     for value in [
@@ -126,8 +148,7 @@ fn cli_error_category_values_match_backend() {
 #[test]
 fn cli_order_type_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "OrderType").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "OrderType").into_iter().collect();
     for value in ["primer_synthesis", "sequencing"] {
         assert!(
             backend.contains(value),
@@ -139,8 +160,7 @@ fn cli_order_type_values_match_backend() {
 #[test]
 fn cli_task_document_type_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskDocumentType").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskDocumentType").into_iter().collect();
     for value in ["sop", "work_order", "attachment", "result_attachment"] {
         assert!(
             backend.contains(value),
@@ -152,8 +172,9 @@ fn cli_task_document_type_values_match_backend() {
 #[test]
 fn cli_task_document_visibility_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskDocumentVisibility").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskDocumentVisibility")
+        .into_iter()
+        .collect();
     for value in ["lab_and_staff", "staff_only", "lab_only"] {
         assert!(
             backend.contains(value),
@@ -193,8 +214,7 @@ fn cli_task_status_display_handles_all_backend_values() {
     // value is something the CLI could legitimately display — i.e., it
     // exists in the TaskStatus enum.
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskStatus").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskStatus").into_iter().collect();
     // These are values the CLI knows about and either displays or accepts.
     let known: HashSet<&str> = [
         "pending_assignment",
@@ -218,8 +238,7 @@ fn cli_task_status_display_handles_all_backend_values() {
 #[test]
 fn cli_task_part_status_display_handles_all_backend_values() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskPartStatus").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskPartStatus").into_iter().collect();
     let known: HashSet<&str> = [
         "LOCKED",
         "READY",
@@ -242,8 +261,9 @@ fn cli_task_part_status_display_handles_all_backend_values() {
 #[test]
 fn cli_task_assignment_role_values_match_backend() {
     let doc = load_openapi();
-    let backend: HashSet<String> =
-        enum_values(&doc, "TaskAssignmentRole").into_iter().collect();
+    let backend: HashSet<String> = enum_values(&doc, "TaskAssignmentRole")
+        .into_iter()
+        .collect();
     for value in ["assignee", "reviewer", "helper"] {
         assert!(
             backend.contains(value),
@@ -255,6 +275,52 @@ fn cli_task_assignment_role_values_match_backend() {
 // ---------------------------------------------------------------------------
 // Path existence tests
 // ---------------------------------------------------------------------------
+
+#[test]
+fn cli_implemented_endpoints_exist_with_methods() {
+    let doc = load_openapi();
+    let expected = [
+        ("GET", "/users/me"),
+        ("PATCH", "/users/me"),
+        ("PATCH", "/users/me/password"),
+        ("POST", "/feishu/cli-auth"),
+        ("POST", "/feishu/cli-token"),
+        ("GET", "/feishu/settings"),
+        ("PATCH", "/feishu/settings"),
+        ("GET", "/orders/"),
+        ("GET", "/orders/{id}"),
+        ("PATCH", "/orders/{id}"),
+        ("POST", "/tasks/submit/primer-synthesis"),
+        ("POST", "/tasks/submit/sanger-sequencing"),
+        ("GET", "/inventory/stocks"),
+        ("POST", "/inventory/stocks/batch"),
+        ("POST", "/inventory/stocks/{id}/checkin"),
+        ("POST", "/inventory/stocks/{id}/checkout"),
+        ("POST", "/inventory/stocks/{id}/adjust"),
+        ("POST", "/inventory/stocks/{id}/transfer"),
+        ("GET", "/projects/by-slug/{id}"),
+        ("GET", "/project/{id}/seed/object-types"),
+        ("POST", "/project/{id}/seed/object-types"),
+        ("GET", "/project/{id}/seed/object-types/{id}"),
+        ("PATCH", "/project/{id}/seed/object-types/{id}"),
+        ("GET", "/project/{id}/seed/intake-batches"),
+        ("POST", "/project/{id}/seed/intake-batches"),
+        ("GET", "/project/{id}/seed/intake-batches/{id}"),
+        (
+            "POST",
+            "/project/{id}/seed/intake-batches/{id}/manifest-import-task",
+        ),
+        ("POST", "/project/{id}/seed/intake-batches/{id}/intake-task"),
+        ("GET", "/project/{id}/seed/intake-records"),
+        ("GET", "/project/{id}/seed/intake-records/public"),
+        ("GET", "/project/{id}/seed/intake-records/{id}"),
+        ("PATCH", "/project/{id}/seed/intake-records/{id}"),
+        ("POST", "/project/{id}/seed/intake-records/{id}/complete"),
+        ("GET", "/project/{id}/seed/stocks"),
+        ("GET", "/project/{id}/seed/stocks/{id}"),
+    ];
+    assert_operations_exist(&doc, &expected);
+}
 
 #[test]
 fn cli_order_paths_exist_in_openapi() {
@@ -278,7 +344,10 @@ fn cli_order_paths_exist_in_openapi() {
         assert!(
             paths.contains(path),
             "CLI order path `{path}` not found in OpenAPI. Available: {:?}",
-            paths.iter().filter(|p| p.contains("order")).collect::<Vec<_>>()
+            paths
+                .iter()
+                .filter(|p| p.contains("order"))
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -503,14 +572,6 @@ fn cli_project_paths_exist_in_openapi() {
         "/projects/{id}",
         "/projects/{id}/members",
         "/projects/{id}/members/{id}",
-        "/project/{id}/germplasm",
-        "/project/{id}/germplasm/{id}",
-        "/project/{id}/germplasm/{id}/sequencing-files",
-        "/project/{id}/germplasm/{id}/stocks",
-        "/project/{id}/planting",
-        "/project/{id}/planting/{id}",
-        "/project/{id}/planting/{id}/harvests",
-        "/project/{id}/planting/{id}/items",
     ];
     for path in expected {
         assert!(
@@ -546,23 +607,19 @@ fn refresh_openapi_fixture() {
     use std::process::Command;
 
     let output = Command::new("curl")
-        .args(["-sSf", "--connect-timeout", "10",
-               "http://8.136.56.203/api/v1/openapi.json"])
+        .args([
+            "-sSf",
+            "--connect-timeout",
+            "10",
+            "http://8.136.56.203/api/v1/openapi.json",
+        ])
         .output()
         .expect("failed to run curl; is curl installed?");
     if !output.status.success() {
-        panic!(
-            "curl failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        panic!("curl failed: {}", String::from_utf8_lossy(&output.stderr));
     }
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/openapi.json");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/openapi.json");
     std::fs::write(&path, &output.stdout)
         .unwrap_or_else(|e| panic!("failed to write {}: {e}", path.display()));
-    eprintln!(
-        "Wrote {} bytes to {}",
-        output.stdout.len(),
-        path.display()
-    );
+    eprintln!("Wrote {} bytes to {}", output.stdout.len(), path.display());
 }

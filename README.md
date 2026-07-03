@@ -27,7 +27,7 @@ The official CLI client for the Scientex lab management system — built for hum
 | 📋 Templates | CRUD for order-info templates (company, address, PI, payment defaults); set default |
 | 👥 Lab | Lab creation, member management (invite/join/role), approval rules, applications |
 | 🗂️ Projects | Project CRUD, status updates, and project membership management |
-| 🌱 Project Workflows | Project-scoped seed/germplasm and planting workflows by slug |
+| 🌱 Project Workflows | Project-scoped workflows by slug, including seed intake object types, batches, records, and stocks |
 | 👤 Users | View/update profile, change password, permission checks |
 
 ## Installation & Quick Start
@@ -140,7 +140,7 @@ After installing skills via `npx skills add` or `scitex skills install`, the Age
 | `scitex-experiment` | Experiment planning and execution workflow with inventory checks before task creation and task-linked checkout during execution |
 | `scitex-admin` | Admin task type catalog creation, deletion, and staff binding |
 | `scitex-lab` | Lab info, members, roles, invitations, applications, approval rules |
-| `scitex-project` | Project slug workflows for germplasm, sequencing files, stocks, planting orders, and harvests |
+| `scitex-project` | Project slug lookup and delegation to project-specific skills |
 | `scitex-users` | Login status, authenticated profile, contact fields, password changes |
 
 The Agent skills are installed by the standard `skills` installer. Domain skills point back to `scitex-shared` for auth and OpenAPI schema rules.

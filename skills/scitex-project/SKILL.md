@@ -11,7 +11,7 @@ metadata:
 
 **Before starting, read `../scitex-shared/SKILL.md` for auth, safety, and OpenAPI rules.**
 
-This skill covers generic project administration. For project-specific workflows (germplasm, planting, etc.), use the corresponding `scitex-<project>` skill.
+This skill covers generic project administration. For project-specific workflows, use the corresponding `scitex-<project>` skill.
 
 ## Project Administration
 
@@ -36,4 +36,4 @@ Use the `slug` field from `projects list` to identify the project, then check it
 - Do not invent commands — check `scitex project <SLUG> --help` or the project-specific skill.
 - Prefer `-f json` for machine-parsable output.
 - Confirm before creating, updating, or deleting project records.
-- For project-specific workflows (germplasm, planting, etc.), delegate to the corresponding `scitex-<project>` skill.
+- For project-specific workflows, delegate to the corresponding `scitex-<project>` skill.

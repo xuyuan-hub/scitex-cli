@@ -18,66 +18,112 @@ pub struct ProjectArgs {
 pub enum ProjectCommand {
     /// Show project information by slug.
     Info,
-    /// Project germplasm workflows.
-    Germplasm {
+    /// Project seed intake workflows.
+    Seed {
         #[command(subcommand)]
-        command: GermplasmCommand,
-    },
-    /// Project planting workflows.
-    Planting {
-        #[command(subcommand)]
-        command: PlantingCommand,
+        command: SeedCommand,
     },
 }
 
 #[derive(Subcommand)]
-pub enum GermplasmCommand {
-    /// List germplasm records.
-    List {
-        #[arg(short, long, default_value_t = 0)]
-        skip: u32,
-        #[arg(short, long, default_value_t = 10)]
-        limit: u32,
-        #[arg(long)]
-        search: Option<String>,
-        #[arg(long)]
-        filters: Option<String>,
+pub enum SeedCommand {
+    /// Manage seed object type configs.
+    ObjectTypes {
+        #[command(subcommand)]
+        command: SeedObjectTypesCommand,
     },
-    /// Show one germplasm record.
-    Get { id: String },
-    /// Create a germplasm record from a JSON object.
-    Create { data: String },
-    /// Update a germplasm record with a JSON object.
-    Update { id: String, data: String },
-    /// Delete a germplasm record.
-    Delete { id: String },
-    /// List sequencing files attached to a germplasm record.
-    SequencingFiles { id: String },
-    /// List stocks for a germplasm record.
-    Stocks { id: String },
+    /// Manage seed intake batches.
+    Batches {
+        #[command(subcommand)]
+        command: SeedBatchesCommand,
+    },
+    /// Manage seed intake records.
+    Records {
+        #[command(subcommand)]
+        command: SeedRecordsCommand,
+    },
+    /// Query seed stocks.
+    Stocks {
+        #[command(subcommand)]
+        command: SeedStocksCommand,
+    },
 }
 
 #[derive(Subcommand)]
-pub enum PlantingCommand {
-    /// List planting orders.
+pub enum SeedObjectTypesCommand {
+    /// List object type configs.
+    List,
+    /// Create an object type config from an inline JSON object or file.
+    Create { data: String },
+    /// Show one object type config.
+    Get { config_id: String },
+    /// Update an object type config from an inline JSON object or file.
+    Update { config_id: String, data: String },
+}
+
+#[derive(Subcommand)]
+pub enum SeedBatchesCommand {
+    /// List intake batches.
+    List,
+    /// Create an intake batch from an inline JSON object or file.
+    Create { data: String },
+    /// Show one intake batch.
+    Get { batch_id: String },
+    /// Upload a manifest and create an import task.
+    ImportManifest {
+        batch_id: String,
+        #[arg(long)]
+        file: String,
+    },
+    /// Create a physical intake task for all or selected records.
+    CreateIntakeTask {
+        batch_id: String,
+        #[arg(long = "record-id")]
+        record_ids: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SeedRecordsCommand {
+    /// List intake records.
     List {
-        #[arg(short, long, default_value_t = 0)]
+        #[arg(long)]
+        batch_id: Option<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long, default_value_t = 0)]
         skip: u32,
-        #[arg(short, long, default_value_t = 100)]
+        #[arg(long, default_value_t = 100)]
         limit: u32,
     },
-    /// Show one planting order.
-    Get { id: String },
-    /// Create a planting order from a JSON object.
-    Create { data: String },
-    /// Update a planting order with a JSON object.
-    Update { id: String, data: String },
-    /// List planting order items.
-    Items { id: String },
-    /// List harvest records for a planting order.
-    Harvests { id: String },
-    /// Create harvest records for a planting order from a JSON object.
-    CreateHarvest { id: String, data: String },
+    /// List employee-visible intake records.
+    Public {
+        #[arg(long)]
+        batch_id: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+    },
+    /// Show one intake record.
+    Get { record_id: String },
+    /// Update one intake record from an inline JSON object or file.
+    Update { record_id: String, data: String },
+    /// Complete one intake record.
+    Complete { record_id: String },
+}
+
+#[derive(Subcommand)]
+pub enum SeedStocksCommand {
+    /// List seed stocks.
+    List {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+    },
+    /// Show one seed stock.
+    Get { stock_id: String },
 }
 
 pub async fn run(
@@ -92,130 +138,189 @@ pub async fn run(
             let project = client.get_project_by_slug(&args.slug).await?;
             print_result(&project, format);
         }
-        ProjectCommand::Germplasm { command } => {
-            run_germplasm(&client, &args.slug, command, format).await?
-        }
-        ProjectCommand::Planting { command } => {
-            run_planting(&client, &args.slug, command, format).await?
+        ProjectCommand::Seed { command } => {
+            run_seed(&client, &args.slug, command, format).await?;
         }
     }
     Ok(())
 }
 
-async fn run_germplasm(
+async fn run_seed(
     client: &ScientexClient,
     slug: &str,
-    command: &GermplasmCommand,
+    command: &SeedCommand,
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
     match command {
-        GermplasmCommand::List {
+        SeedCommand::ObjectTypes { command } => {
+            run_seed_object_types(client, slug, command, format).await?
+        }
+        SeedCommand::Batches { command } => run_seed_batches(client, slug, command, format).await?,
+        SeedCommand::Records { command } => run_seed_records(client, slug, command, format).await?,
+        SeedCommand::Stocks { command } => run_seed_stocks(client, slug, command, format).await?,
+    }
+    Ok(())
+}
+
+async fn run_seed_object_types(
+    client: &ScientexClient,
+    slug: &str,
+    command: &SeedObjectTypesCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        SeedObjectTypesCommand::List => {
+            let items = client.list_seed_object_types(slug).await?;
+            print_list_or_json(&items, format);
+        }
+        SeedObjectTypesCommand::Create { data } => {
+            let data = read_json_arg_or_file(data)?;
+            let item = client.create_seed_object_type(slug, &data).await?;
+            print_result(&item, format);
+        }
+        SeedObjectTypesCommand::Get { config_id } => {
+            let item = client.get_seed_object_type(slug, config_id).await?;
+            print_result(&item, format);
+        }
+        SeedObjectTypesCommand::Update { config_id, data } => {
+            let data = read_json_arg_or_file(data)?;
+            let item = client
+                .update_seed_object_type(slug, config_id, &data)
+                .await?;
+            print_result(&item, format);
+        }
+    }
+    Ok(())
+}
+
+async fn run_seed_batches(
+    client: &ScientexClient,
+    slug: &str,
+    command: &SeedBatchesCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        SeedBatchesCommand::List => {
+            let items = client.list_seed_intake_batches(slug).await?;
+            print_list_or_json(&items, format);
+        }
+        SeedBatchesCommand::Create { data } => {
+            let data = read_json_arg_or_file(data)?;
+            let item = client.create_seed_intake_batch(slug, &data).await?;
+            print_result(&item, format);
+        }
+        SeedBatchesCommand::Get { batch_id } => {
+            let item = client.get_seed_intake_batch(slug, batch_id).await?;
+            print_result(&item, format);
+        }
+        SeedBatchesCommand::ImportManifest { batch_id, file } => {
+            let item = client
+                .create_seed_manifest_import_task(slug, batch_id, file)
+                .await?;
+            print_result(&item, format);
+        }
+        SeedBatchesCommand::CreateIntakeTask {
+            batch_id,
+            record_ids,
+        } => {
+            let item = client
+                .create_seed_intake_task(slug, batch_id, record_ids)
+                .await?;
+            print_result(&item, format);
+        }
+    }
+    Ok(())
+}
+
+async fn run_seed_records(
+    client: &ScientexClient,
+    slug: &str,
+    command: &SeedRecordsCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        SeedRecordsCommand::List {
+            batch_id,
+            status,
             skip,
             limit,
-            search,
-            filters,
         } => {
-            let records = client
-                .list_project_germplasm(slug, *skip, *limit, search.as_deref(), filters.as_deref())
+            let items = client
+                .list_seed_intake_records(
+                    slug,
+                    batch_id.as_deref(),
+                    status.as_deref(),
+                    *skip,
+                    *limit,
+                )
                 .await?;
-            match format {
-                OutputFormat::Json => print_result(&records, format),
-                OutputFormat::Text => print_paginated_items(&records),
-            }
+            print_list_or_json(&items, format);
         }
-        GermplasmCommand::Get { id } => {
-            let record = client.get_project_germplasm(slug, id).await?;
-            print_result(&record, format);
-        }
-        GermplasmCommand::Create { data } => {
-            let data: serde_json::Value = serde_json::from_str(data)?;
-            let record = client.create_project_germplasm(slug, &data).await?;
-            print_result(&record, format);
-        }
-        GermplasmCommand::Update { id, data } => {
-            let data: serde_json::Value = serde_json::from_str(data)?;
-            let record = client.update_project_germplasm(slug, id, &data).await?;
-            print_result(&record, format);
-        }
-        GermplasmCommand::Delete { id } => {
-            let result = client.delete_project_germplasm(slug, id).await?;
-            print_result(&result, format);
-        }
-        GermplasmCommand::SequencingFiles { id } => {
-            let files = client
-                .list_project_germplasm_sequencing_files(slug, id)
+        SeedRecordsCommand::Public {
+            batch_id,
+            skip,
+            limit,
+        } => {
+            let items = client
+                .list_public_seed_intake_records(slug, batch_id.as_deref(), *skip, *limit)
                 .await?;
-            match format {
-                OutputFormat::Json => print_result(&files, format),
-                OutputFormat::Text => print_paginated_items(&files),
-            }
+            print_list_or_json(&items, format);
         }
-        GermplasmCommand::Stocks { id } => {
-            let stocks = client.list_project_germplasm_stocks(slug, id).await?;
-            match format {
-                OutputFormat::Json => print_result(&stocks, format),
-                OutputFormat::Text => print_paginated_items(&stocks),
-            }
+        SeedRecordsCommand::Get { record_id } => {
+            let item = client.get_seed_intake_record(slug, record_id).await?;
+            print_result(&item, format);
+        }
+        SeedRecordsCommand::Update { record_id, data } => {
+            let data = read_json_arg_or_file(data)?;
+            let item = client
+                .update_seed_intake_record(slug, record_id, &data)
+                .await?;
+            print_result(&item, format);
+        }
+        SeedRecordsCommand::Complete { record_id } => {
+            let item = client.complete_seed_intake_record(slug, record_id).await?;
+            print_result(&item, format);
         }
     }
     Ok(())
 }
 
-async fn run_planting(
+async fn run_seed_stocks(
     client: &ScientexClient,
     slug: &str,
-    command: &PlantingCommand,
+    command: &SeedStocksCommand,
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
     match command {
-        PlantingCommand::List { skip, limit } => {
-            let orders = client
-                .list_project_planting_orders(slug, *skip, *limit)
-                .await?;
-            match format {
-                OutputFormat::Json => print_result(&orders, format),
-                OutputFormat::Text => print_paginated_items(&orders),
-            }
+        SeedStocksCommand::List { skip, limit } => {
+            let items = client.list_seed_stocks(slug, *skip, *limit).await?;
+            print_list_or_json(&items, format);
         }
-        PlantingCommand::Get { id } => {
-            let order = client.get_project_planting_order(slug, id).await?;
-            print_result(&order, format);
-        }
-        PlantingCommand::Create { data } => {
-            let data: serde_json::Value = serde_json::from_str(data)?;
-            let order = client.create_project_planting_order(slug, &data).await?;
-            print_result(&order, format);
-        }
-        PlantingCommand::Update { id, data } => {
-            let data: serde_json::Value = serde_json::from_str(data)?;
-            let order = client
-                .update_project_planting_order(slug, id, &data)
-                .await?;
-            print_result(&order, format);
-        }
-        PlantingCommand::Items { id } => {
-            let items = client.list_project_planting_items(slug, id).await?;
-            match format {
-                OutputFormat::Json => print_result(&items, format),
-                OutputFormat::Text => print_paginated_items(&items),
-            }
-        }
-        PlantingCommand::Harvests { id } => {
-            let harvests = client.list_project_planting_harvests(slug, id).await?;
-            match format {
-                OutputFormat::Json => print_result(&harvests, format),
-                OutputFormat::Text => print_paginated_items(&harvests),
-            }
-        }
-        PlantingCommand::CreateHarvest { id, data } => {
-            let data: serde_json::Value = serde_json::from_str(data)?;
-            let harvests = client
-                .create_project_planting_harvest(slug, id, &data)
-                .await?;
-            print_result(&harvests, format);
+        SeedStocksCommand::Get { stock_id } => {
+            let item = client.get_seed_stock(slug, stock_id).await?;
+            print_result(&item, format);
         }
     }
     Ok(())
+}
+
+fn print_list_or_json(
+    items: &crate::api_response::PaginatedList<serde_json::Value>,
+    format: &OutputFormat,
+) {
+    match format {
+        OutputFormat::Json => print_result(items, format),
+        OutputFormat::Text => print_paginated_items(items),
+    }
+}
+
+fn read_json_arg_or_file(input: &str) -> anyhow::Result<serde_json::Value> {
+    if std::path::Path::new(input).exists() {
+        let content = std::fs::read_to_string(input)?;
+        Ok(serde_json::from_str(&content)?)
+    } else {
+        Ok(serde_json::from_str(input)?)
+    }
 }
 
 #[cfg(test)]
@@ -251,160 +356,152 @@ mod tests {
     }
 
     #[test]
-    fn parses_germplasm_list_options() {
+    fn parses_seed_object_type_commands() {
+        let args = parse_project(&["project", "tashan", "seed", "object-types", "list"]);
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::ObjectTypes {
+                    command: SeedObjectTypesCommand::List
+                }
+            }
+        ));
+
         let args = parse_project(&[
             "project",
             "tashan",
-            "germplasm",
-            "list",
-            "--skip",
-            "20",
-            "--limit",
-            "50",
-            "--search",
-            "rice A",
-            "--filters",
-            r#"[{"field":"name","operator":"contains","value":"A"}]"#,
-        ]);
-
-        match args.command {
-            ProjectCommand::Germplasm {
-                command:
-                    GermplasmCommand::List {
-                        skip,
-                        limit,
-                        search,
-                        filters,
-                    },
-            } => {
-                assert_eq!(skip, 20);
-                assert_eq!(limit, 50);
-                assert_eq!(search.as_deref(), Some("rice A"));
-                assert_eq!(
-                    filters.as_deref(),
-                    Some(r#"[{"field":"name","operator":"contains","value":"A"}]"#)
-                );
-            }
-            _ => panic!("expected germplasm list command"),
-        }
-    }
-
-    #[test]
-    fn parses_germplasm_list_defaults() {
-        let args = parse_project(&["project", "tashan", "germplasm", "list"]);
-
-        match args.command {
-            ProjectCommand::Germplasm {
-                command:
-                    GermplasmCommand::List {
-                        skip,
-                        limit,
-                        search,
-                        filters,
-                    },
-            } => {
-                assert_eq!(skip, 0);
-                assert_eq!(limit, 10);
-                assert_eq!(search, None);
-                assert_eq!(filters, None);
-            }
-            _ => panic!("expected germplasm list command"),
-        }
-    }
-
-    #[test]
-    fn parses_germplasm_mutation_commands() {
-        let create = parse_project(&[
-            "project",
-            "tashan",
-            "germplasm",
-            "create",
-            r#"{"name":"A"}"#,
-        ]);
-        match create.command {
-            ProjectCommand::Germplasm {
-                command: GermplasmCommand::Create { data },
-            } => assert_eq!(data, r#"{"name":"A"}"#),
-            _ => panic!("expected germplasm create command"),
-        }
-
-        let update = parse_project(&[
-            "project",
-            "tashan",
-            "germplasm",
+            "seed",
+            "object-types",
             "update",
-            "gp-1",
-            r#"{"name":"B"}"#,
+            "cfg-1",
+            r#"{"name":"Seed"}"#,
         ]);
-        match update.command {
-            ProjectCommand::Germplasm {
-                command: GermplasmCommand::Update { id, data },
+        match args.command {
+            ProjectCommand::Seed {
+                command:
+                    SeedCommand::ObjectTypes {
+                        command: SeedObjectTypesCommand::Update { config_id, data },
+                    },
             } => {
-                assert_eq!(id, "gp-1");
-                assert_eq!(data, r#"{"name":"B"}"#);
+                assert_eq!(config_id, "cfg-1");
+                assert_eq!(data, r#"{"name":"Seed"}"#);
             }
-            _ => panic!("expected germplasm update command"),
+            _ => panic!("expected seed object type update command"),
         }
     }
 
     #[test]
-    fn parses_planting_list_defaults_and_overrides() {
-        let defaults = parse_project(&["project", "tashan", "planting", "list"]);
-        match defaults.command {
-            ProjectCommand::Planting {
-                command: PlantingCommand::List { skip, limit },
-            } => {
-                assert_eq!(skip, 0);
-                assert_eq!(limit, 100);
-            }
-            _ => panic!("expected planting list command"),
-        }
-
-        let overrides = parse_project(&[
-            "project", "tashan", "planting", "list", "--skip", "10", "--limit", "25",
-        ]);
-        match overrides.command {
-            ProjectCommand::Planting {
-                command: PlantingCommand::List { skip, limit },
-            } => {
-                assert_eq!(skip, 10);
-                assert_eq!(limit, 25);
-            }
-            _ => panic!("expected planting list command"),
-        }
-    }
-
-    #[test]
-    fn parses_planting_subresource_commands() {
-        let items = parse_project(&["project", "tashan", "planting", "items", "ord-1"]);
-        match items.command {
-            ProjectCommand::Planting {
-                command: PlantingCommand::Items { id },
-            } => assert_eq!(id, "ord-1"),
-            _ => panic!("expected planting items command"),
-        }
-
-        let create_harvest = parse_project(&[
+    fn parses_seed_batch_commands() {
+        let args = parse_project(&[
             "project",
             "tashan",
-            "planting",
-            "create-harvest",
-            "ord-1",
-            r#"{"items":[]}"#,
+            "seed",
+            "batches",
+            "import-manifest",
+            "batch-1",
+            "--file",
+            "manifest.xlsx",
         ]);
-        match create_harvest.command {
-            ProjectCommand::Planting {
-                command: PlantingCommand::CreateHarvest { id, data },
+        match args.command {
+            ProjectCommand::Seed {
+                command:
+                    SeedCommand::Batches {
+                        command: SeedBatchesCommand::ImportManifest { batch_id, file },
+                    },
             } => {
-                assert_eq!(id, "ord-1");
-                assert_eq!(data, r#"{"items":[]}"#);
+                assert_eq!(batch_id, "batch-1");
+                assert_eq!(file, "manifest.xlsx");
             }
-            _ => panic!("expected planting create-harvest command"),
+            _ => panic!("expected seed manifest command"),
         }
+
+        let args = parse_project(&[
+            "project",
+            "tashan",
+            "seed",
+            "batches",
+            "create-intake-task",
+            "batch-1",
+            "--record-id",
+            "rec-1",
+            "--record-id",
+            "rec-2",
+        ]);
+        match args.command {
+            ProjectCommand::Seed {
+                command:
+                    SeedCommand::Batches {
+                        command:
+                            SeedBatchesCommand::CreateIntakeTask {
+                                batch_id,
+                                record_ids,
+                            },
+                    },
+            } => {
+                assert_eq!(batch_id, "batch-1");
+                assert_eq!(record_ids, vec!["rec-1".to_string(), "rec-2".to_string()]);
+            }
+            _ => panic!("expected seed intake task command"),
+        }
+    }
+
+    #[test]
+    fn parses_seed_record_and_stock_commands() {
+        let args = parse_project(&[
+            "project",
+            "tashan",
+            "seed",
+            "records",
+            "list",
+            "--batch-id",
+            "batch-1",
+            "--status",
+            "pending",
+            "--skip",
+            "10",
+            "--limit",
+            "20",
+        ]);
+        match args.command {
+            ProjectCommand::Seed {
+                command:
+                    SeedCommand::Records {
+                        command:
+                            SeedRecordsCommand::List {
+                                batch_id,
+                                status,
+                                skip,
+                                limit,
+                            },
+                    },
+            } => {
+                assert_eq!(batch_id.as_deref(), Some("batch-1"));
+                assert_eq!(status.as_deref(), Some("pending"));
+                assert_eq!(skip, 10);
+                assert_eq!(limit, 20);
+            }
+            _ => panic!("expected seed records list command"),
+        }
+
+        let args = parse_project(&["project", "tashan", "seed", "stocks", "get", "stock-1"]);
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::Stocks {
+                    command: SeedStocksCommand::Get { .. }
+                }
+            }
+        ));
     }
 
     #[test]
     fn rejects_unknown_project_subcommand() {
         assert!(TestCli::try_parse_from(["scitex", "project", "tashan", "unknown"]).is_err());
+    }
+
+    #[test]
+    fn rejects_removed_project_workflow_commands() {
+        assert!(TestCli::try_parse_from(["scitex", "project", "tashan", "germplasm"]).is_err());
+        assert!(TestCli::try_parse_from(["scitex", "project", "tashan", "planting"]).is_err());
     }
 }

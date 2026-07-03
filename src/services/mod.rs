@@ -5,6 +5,7 @@ mod inventory;
 mod lab;
 mod orders;
 mod project;
+mod project_seed;
 mod projects;
 mod tasks;
 mod templates;
