@@ -141,9 +141,13 @@ After installing skills via `npx skills add` or `scitex skills install`, the Age
 | `scitex-admin` | Admin task type catalog creation, deletion, and staff binding |
 | `scitex-lab` | Lab info, members, roles, invitations, applications, approval rules |
 | `scitex-project` | Project slug lookup and delegation to project-specific skills |
+| `scitex-tashan` | Tashan (他山) project workflows: germplasm records, sequencing files, seed intake, planting orders/items, harvest records |
+| `scitex-task` | Natural-language task/workflow creation: check task types, then create single-stage or multi-stage tasks |
+| `scitex-evo` | Molecular design compute tasks: Tm calculation, codon optimization, NGS primer design/verification, Golden Gate assembly |
 | `scitex-users` | Login status, authenticated profile, contact fields, password changes |
+| `scitex-error-report` | Categorize and submit a client error report when the CLI misbehaves |
 
-The Agent skills are installed by the standard `skills` installer. Domain skills point back to `scitex-shared` for auth and OpenAPI schema rules.
+The Agent skills are installed by the standard `skills` installer. Domain skills point back to `scitex-shared` for auth and OpenAPI schema rules. Not every backend capability has CLI coverage yet — see `docs/命令参考.md` for the authoritative, up-to-date command list before assuming a command exists.
 
 ## Project Boundary
 
@@ -279,7 +283,7 @@ Multi-platform builds via GitHub Actions on every push:
 * Windows (x86_64)
 * macOS (x86_64 + arm64)
 
-`cargo test` runs before build — 45 unit tests must pass.
+`cargo test` runs before build — 144 unit tests + 24 OpenAPI contract tests must pass (counts drift as coverage grows; run `cargo test -q -- --list` for the current figure).
 
 Tagged pushes (e.g. `v0.1.0`) auto-create GitHub Releases with binaries.
 
@@ -439,10 +443,14 @@ scitex skills install --global
 | `scitex-experiment` | 实验方案与执行工作流：创建任务前检查库存，执行阶段关联任务出库 |
 | `scitex-admin` | 管理端任务类型目录的创建、删除与员工绑定 |
 | `scitex-lab` | 课题组信息、成员、角色、邀请、入组申请、审批规则 |
-| `scitex-project` | 按项目 slug 操作种质、测序文件、库存、种植单和收获记录 |
+| `scitex-project` | 按项目 slug 定位并转发到具体项目 skill |
+| `scitex-tashan` | 他山项目工作流：种质记录、测序文件、种子入库、种植单/种植项、收获记录 |
+| `scitex-task` | 自然语言创建任务/工作流：先查任务类型，再创建单阶段或多阶段任务 |
+| `scitex-evo` | 分子设计计算任务：Tm 计算、密码子优化、NGS 引物设计/验证、Golden Gate 拼接 |
 | `scitex-users` | 登录状态、当前用户资料、联系人字段、密码修改 |
+| `scitex-error-report` | CLI 出现问题时，分类并提交客户端错误报告 |
 
-Agent skills 会由标准 `skills` 安装器一次性安装；领域 skill 会回指 `scitex-shared` 获取认证和 OpenAPI schema 规则。
+Agent skills 会由标准 `skills` 安装器一次性安装；领域 skill 会回指 `scitex-shared` 获取认证和 OpenAPI schema 规则。并非所有后端能力都已有 CLI 覆盖 —— 使用前请以 `docs/命令参考.md` 为准，不要假设某个命令已存在。
 
 ## 项目边界
 
@@ -578,7 +586,7 @@ src/
 * Windows（x86_64）
 * macOS（x86_64 + arm64）
 
-构建前运行 `cargo test` —— 45 个单元测试必须通过。
+构建前运行 `cargo test` —— 144 个单元测试 + 24 个 OpenAPI 合同测试必须通过（数字会随覆盖增加而变化，以 `cargo test -q -- --list` 的实际结果为准）。
 
 打标签推送（如 `v0.1.0`）自动创建 GitHub Release 并附带二进制文件。
 

@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
+> Non-Claude coding agents (Codex, Cursor, OpenCode, etc.) should read [AGENTS.md](AGENTS.md) first — it carries the same project-boundary rules in tool-agnostic form. This file adds Claude-Code-specific depth (full source layout, patterns) on top of that baseline.
+
 ## Project Overview
 
 **scitex-cli** — A Rust CLI client for the Scientex lab management system (primer synthesis + sequencing orders, inventory, lab administration).
@@ -77,20 +79,35 @@ src/
 ├── http.rs         # Raw HTTP methods: get/post/patch/put/delete/upload/download
 ├── api_response.rs # Response envelope unwrapping (data/items/results)
 ├── commands/       # clap subcommand args + run() handlers
-│   ├── users.rs    # me / update-me / change-password
-│   ├── orders.rs   # list / get / create / update / resend / download / upload
-│   ├── templates.rs# CRUD + default for order-info templates
-│   ├── inventory.rs# list / get / stats / checkin / checkout / locations
-│   ├── lab.rs      # lab info / members / invite / join / approval rules
-│   └── skills.rs   # AI agent skill installation and check
+│   ├── users.rs        # me / update-me / change-password
+│   ├── orders.rs       # list / get / create / update / resend / download / upload
+│   ├── templates.rs    # CRUD + default for order-info templates
+│   ├── inventory.rs    # list / get / stats / checkin / checkout / locations
+│   ├── lab.rs          # lab info / members / invite / join / approval rules
+│   ├── admin.rs        # task-type catalog admin, staff binding
+│   ├── project.rs      # project CRUD + `project <slug> seed ...` subcommands
+│   ├── projects.rs     # project list/status (non-slug-scoped)
+│   ├── tasks.rs        # task/workflow create, parts, assignments, upload-field
+│   ├── error_report.rs # client error report submission
+│   ├── update.rs       # self-update / update check
+│   └── skills.rs       # AI agent skill installation and check
 └── services/       # impl ScientexClient blocks, domain-specific API methods
-    ├── orders.rs   # Order API path builders + unit tests
-    ├── users.rs    # User API path builders + unit tests
-    ├── templates.rs# Template API path builders + unit tests
-    ├── inventory.rs# Stock/location API path builders + unit tests
-    ├── lab.rs      # Lab/member/approval API path builders + unit tests
-    └── helpers.rs  # Shared: empty_body(), single_field_body(), url_encode()
+    ├── orders.rs       # Order API path builders + unit tests
+    ├── users.rs        # User API path builders + unit tests
+    ├── templates.rs    # Template API path builders + unit tests
+    ├── inventory.rs    # Stock/location API path builders + unit tests
+    ├── lab.rs          # Lab/member/approval API path builders + unit tests
+    ├── admin.rs        # Task-type catalog admin API path builders
+    ├── project.rs       # Project CRUD API path builders
+    ├── projects.rs      # Project list/status API path builders
+    ├── project_seed.rs  # `project-seed` domain: object-types/batches/records/stocks
+    ├── tasks.rs          # Task/workflow/part/assignment API path builders
+    ├── error_reports.rs  # Error report submission API path builders
+    ├── feishu.rs          # Feishu cloud-document dual-association helpers
+    └── helpers.rs         # Shared: empty_body(), single_field_body(), url_encode()
 ```
+
+`src/error_history.rs` (top-level, alongside `errors.rs`) tracks recent client errors for `scitex error-report` submissions.
 
 ### Key Patterns
 
@@ -104,7 +121,7 @@ src/
 - **Errors**: `ScientexError` in `src/errors.rs` (not `error.rs` — avoids collision with `std::error`)
 - **Output modes**: `-f json` for machine-readable, default text for human (colored status badges)
 - **Agent skills**: `scitex skills install` delegates to `npx skills add xuyuan-hub/scitex-cli`, so supported agents refresh their own skill indexes.
-- **Tests**: `cargo test` must pass before every submission — CI gate enforces this (130 unit tests + 21 OpenAPI contract tests; see `tests/openapi_contract.rs`)
+- **Tests**: `cargo test` must pass before every submission — CI gate enforces this. Current baseline: 144 lib unit tests + 24 OpenAPI contract tests (1 intentionally `#[ignore]`d) + 4 `#[ignore]`d live-backend tests in `tests/admin_task_types_live.rs` / `tests/feishu_dual_link_live.rs`; see `tests/openapi_contract.rs`. Re-check the actual count with `cargo test -q -- --list` before quoting it elsewhere — it drifts every time a domain gets new coverage.
 
 ### API Base URL
 
@@ -135,12 +152,7 @@ pending → ordered → received → stored
 Five workflow roles: `pi` > `procurement` > `finance` > `warehouse` > `member`
 
 ### Reference Docs
-Detailed API schemas are bundled with the domain skills installed by the standard `skills` installer:
-- `orders.md` — Order schemas, status machine, supplier differences
-- `inventory.md` — Stock/checkin/checkout schemas
-- `templates.md` — Template fields for order defaults
-- `lab.md` — Lab CRUD, member management, approval rules
-- `users.md` — User info, permission model, signup
+Each domain skill under `skills/<name>/` is a single self-contained `SKILL.md` (no separate `references/*.md` files, except `scitex-evo/agents/openai.yaml`). See the skill table in [README.md](README.md#ai-agent-skills) for the current list — keep that table and this list in sync when adding/removing a skill directory.
 
 ## Development Workflow
 
