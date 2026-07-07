@@ -545,10 +545,7 @@ mod tests {
             lab_task_confirm_path("task 1"),
             "/lab/tasks/task%201/confirm"
         );
-        assert_eq!(
-            lab_task_reject_path("task 1"),
-            "/lab/tasks/task%201/reject"
-        );
+        assert_eq!(lab_task_reject_path("task 1"), "/lab/tasks/task%201/reject");
     }
 
     #[test]

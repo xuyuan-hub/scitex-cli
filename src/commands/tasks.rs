@@ -340,9 +340,7 @@ pub async fn run(
                 .await?;
         }
         TasksCommand::Confirm { id, lab_id } => {
-            let result = client
-                .confirm_lab_task(id, lab_id.as_deref())
-                .await?;
+            let result = client.confirm_lab_task(id, lab_id.as_deref()).await?;
             print_result(&result, format);
         }
         TasksCommand::Reject { id, reason, lab_id } => {
