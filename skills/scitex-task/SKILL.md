@@ -192,10 +192,11 @@ When inspecting a workflow, interpret stage status as:
 
 - `LOCKED`: the stage is waiting for dependency conditions
 - `READY`: dependency conditions are satisfied and the stage is eligible to run
-- `in_progress`: the stage is running
-- `completed`: the stage finished successfully
+- `IN_PROGRESS`: the stage is running
+- `COMPLETED`: the stage finished successfully
+- `BLOCKED`: the stage cannot proceed (e.g. upstream failure)
 
-For compute-only workflows, a dependent compute stage may move from `LOCKED` to `READY`, then to `in_progress` and `completed` automatically once the prerequisite stage completes. The root task can remain `in_progress` or `waiting_lab_confirm` even when compute stages have output; check stage statuses and `part.output_data.exit_code` before reporting whether compute work finished.
+For compute-only workflows, a dependent compute stage may move from `LOCKED` to `READY`, then to `IN_PROGRESS` and `COMPLETED` automatically once the prerequisite stage completes. The root task can remain `IN_PROGRESS` or `WAITING_LAB_CONFIRM` even when compute stages have output; check stage statuses and `part.output_data.exit_code` before reporting whether compute work finished.
 
 ## Lab Context
 

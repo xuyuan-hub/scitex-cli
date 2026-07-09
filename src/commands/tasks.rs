@@ -176,9 +176,9 @@ pub enum AssignmentStatusArg {
 impl AssignmentStatusArg {
     fn as_str(&self) -> &'static str {
         match self {
-            AssignmentStatusArg::Pending => "pending",
-            AssignmentStatusArg::InProgress => "in_progress",
-            AssignmentStatusArg::Completed => "completed",
+            AssignmentStatusArg::Pending => "PENDING",
+            AssignmentStatusArg::InProgress => "IN_PROGRESS",
+            AssignmentStatusArg::Completed => "COMPLETED",
         }
     }
 }
@@ -1107,9 +1107,9 @@ async fn resolve_part_category(
     }
 
     if output_data_has_content(part.output_data.as_ref()) {
-        Ok("compute".to_string())
+        Ok("COMPUTE".to_string())
     } else {
-        Ok("staff".to_string())
+        Ok("STAFF".to_string())
     }
 }
 

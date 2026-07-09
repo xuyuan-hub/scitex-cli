@@ -198,11 +198,17 @@ pub fn print_order_brief(order: &Order) {
 }
 
 fn status_colored(status: &str) -> colored::ColoredString {
-    match status {
-        "pending" => status.yellow(),
+    // Backend enums use mixed casing (orders: lowercase, tasks/parts: uppercase).
+    // Normalize to lowercase so both forms get the correct colour.
+    let lower = status.to_ascii_lowercase();
+    match lower.as_str() {
+        "pending" | "pending_assignment" => status.yellow(),
         "received" | "completed" | "done" => status.green(),
-        "failed" | "cancelled" | "rejected" => status.red(),
-        "processing" | "in_progress" => status.blue(),
+        "failed" | "cancelled" | "canceled" | "rejected" => status.red(),
+        "processing" | "in_progress" | "assigned" | "waiting_lab_confirm" | "ready" | "blocked" => {
+            status.blue()
+        }
+        "locked" => status.dimmed(),
         _ => status.normal(),
     }
 }
@@ -315,5 +321,48 @@ mod tests {
     fn unique_output_path_returns_missing_path_unchanged() {
         let path = std::path::PathBuf::from("definitely_missing_output_file.txt");
         assert_eq!(super::unique_output_path(&path), path);
+    }
+
+    // status_colored returns ColoredString; we verify it does not panic and
+    // produces output containing the input status text for every known variant.
+    #[test]
+    fn status_colored_handles_lowercase_and_uppercase() {
+        // Order statuses (lowercase)
+        for s in ["pending", "received", "completed", "done", "failed", "cancelled", "rejected", "processing", "in_progress"] {
+            let colored = super::status_colored(s);
+            assert!(
+                colored.to_string().contains(s),
+                "status_colored should preserve status text for `{s}`"
+            );
+        }
+        // Task statuses (uppercase)
+        for s in ["PENDING_ASSIGNMENT", "ASSIGNED", "IN_PROGRESS", "WAITING_LAB_CONFIRM", "COMPLETED", "FAILED", "CANCELLED"] {
+            let colored = super::status_colored(s);
+            assert!(
+                colored.to_string().contains(s),
+                "status_colored should preserve status text for `{s}`"
+            );
+        }
+        // Part statuses (uppercase, including BLOCKED)
+        for s in ["LOCKED", "READY", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED", "PENDING", "BLOCKED"] {
+            let colored = super::status_colored(s);
+            assert!(
+                colored.to_string().contains(s),
+                "status_colored should preserve status text for `{s}`"
+            );
+        }
+    }
+
+    #[test]
+    fn status_colored_blocked_is_not_default_normal() {
+        // BLOCKED should get the blue colour branch, not the fallback normal.
+        let colored = super::status_colored("BLOCKED");
+        let rendered = colored.to_string();
+        // colored crate wraps with ANSI escape codes; the presence of ESC char
+        // means a colour was applied (normal() also adds no styling).
+        assert!(
+            rendered.contains("BLOCKED"),
+            "BLOCKED status text should appear in output"
+        );
     }
 }

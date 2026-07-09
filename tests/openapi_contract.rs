@@ -104,7 +104,7 @@ fn cli_assignment_status_values_match_backend() {
         .into_iter()
         .collect();
     // These are the values AssignmentStatusArg::as_str() can produce.
-    for value in ["pending", "in_progress", "completed"] {
+    for value in ["PENDING", "IN_PROGRESS", "COMPLETED"] {
         assert!(
             backend.contains(value),
             "CLI assignment status `{value}` not in backend TaskAssignmentStatus {backend:?}"
@@ -116,7 +116,7 @@ fn cli_assignment_status_values_match_backend() {
 fn cli_task_type_category_values_match_backend() {
     let doc = load_openapi();
     let backend: HashSet<String> = enum_values(&doc, "TaskTypeCategory").into_iter().collect();
-    for value in ["compute", "staff"] {
+    for value in ["COMPUTE", "STAFF"] {
         assert!(
             backend.contains(value),
             "CLI task type category `{value}` not in backend TaskTypeCategory {backend:?}"
@@ -217,13 +217,13 @@ fn cli_task_status_display_handles_all_backend_values() {
     let backend: HashSet<String> = enum_values(&doc, "TaskStatus").into_iter().collect();
     // These are values the CLI knows about and either displays or accepts.
     let known: HashSet<&str> = [
-        "pending_assignment",
-        "assigned",
-        "in_progress",
-        "waiting_lab_confirm",
-        "completed",
-        "failed",
-        "cancelled",
+        "PENDING_ASSIGNMENT",
+        "ASSIGNED",
+        "IN_PROGRESS",
+        "WAITING_LAB_CONFIRM",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
     ]
     .into_iter()
     .collect();
@@ -242,11 +242,12 @@ fn cli_task_part_status_display_handles_all_backend_values() {
     let known: HashSet<&str> = [
         "LOCKED",
         "READY",
-        "in_progress",
-        "completed",
-        "failed",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "FAILED",
         "CANCELLED",
-        "pending",
+        "PENDING",
+        "BLOCKED",
     ]
     .into_iter()
     .collect();
@@ -318,6 +319,7 @@ fn cli_implemented_endpoints_exist_with_methods() {
         ("POST", "/project/{id}/seed/intake-records/{id}/complete"),
         ("GET", "/project/{id}/seed/stocks"),
         ("GET", "/project/{id}/seed/stocks/{id}"),
+        ("GET", "/project/{id}/seed/field-catalog"),
     ];
     assert_operations_exist(&doc, &expected);
 }

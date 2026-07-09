@@ -47,6 +47,8 @@ pub enum SeedCommand {
         #[command(subcommand)]
         command: SeedStocksCommand,
     },
+    /// Show the field catalog for seed intake records.
+    FieldCatalog,
 }
 
 #[derive(Subcommand)]
@@ -158,6 +160,9 @@ async fn run_seed(
         SeedCommand::Batches { command } => run_seed_batches(client, slug, command, format).await?,
         SeedCommand::Records { command } => run_seed_records(client, slug, command, format).await?,
         SeedCommand::Stocks { command } => run_seed_stocks(client, slug, command, format).await?,
+        SeedCommand::FieldCatalog => {
+            run_seed_field_catalog(client, slug, format).await?;
+        }
     }
     Ok(())
 }
@@ -302,6 +307,49 @@ async fn run_seed_stocks(
         }
     }
     Ok(())
+}
+
+async fn run_seed_field_catalog(
+    client: &ScientexClient,
+    slug: &str,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    let data = client.get_seed_field_catalog(slug).await?;
+    match format {
+        OutputFormat::Json => print_result(&data, format),
+        OutputFormat::Text => print_seed_field_catalog(&data),
+    }
+    Ok(())
+}
+
+fn print_seed_field_catalog(data: &serde_json::Value) {
+    let items = data
+        .as_array()
+        .map(|a| a.as_slice())
+        .unwrap_or_default();
+    if items.is_empty() {
+        println!("暂无字段元数据");
+        return;
+    }
+    println!(
+        "{:<24}  {:<12}  {:<8}  {}",
+        "KEY", "LABEL", "TYPE", "CATEGORY"
+    );
+    for item in items {
+        let key = item.get("key").and_then(|v| v.as_str()).unwrap_or("-");
+        let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("-");
+        let field_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("-");
+        let category = item
+            .get("category")
+            .and_then(|v| v.as_str())
+            .unwrap_or("-");
+        println!("{:<24}  {:<12}  {:<8}  {}", key, label, field_type, category);
+        if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
+            if !desc.is_empty() {
+                println!("  {}", desc);
+            }
+        }
+    }
 }
 
 fn print_list_or_json(
@@ -503,5 +551,45 @@ mod tests {
     fn rejects_removed_project_workflow_commands() {
         assert!(TestCli::try_parse_from(["scitex", "project", "tashan", "germplasm"]).is_err());
         assert!(TestCli::try_parse_from(["scitex", "project", "tashan", "planting"]).is_err());
+    }
+
+    #[test]
+    fn parses_seed_field_catalog_command() {
+        let args = parse_project(&["project", "tashan", "seed", "field-catalog"]);
+        assert_eq!(args.slug, "tashan");
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::FieldCatalog
+            }
+        ));
+    }
+
+    #[test]
+    fn print_seed_field_catalog_does_not_panic() {
+        let data = serde_json::json!([
+            {
+                "key": "sample_name",
+                "label": "样品名称",
+                "type": "string",
+                "category": "标识",
+                "description": "样品的唯一名称"
+            },
+            {
+                "key": "intake_date",
+                "label": "入库日期",
+                "type": "date",
+                "category": "流程",
+                "description": ""
+            }
+        ]);
+        // The function prints to stdout; just confirm it does not panic.
+        super::print_seed_field_catalog(&data);
+
+        // Empty array should also not panic
+        super::print_seed_field_catalog(&serde_json::json!([]));
+
+        // Non-array input (falls through to empty slice) should not panic
+        super::print_seed_field_catalog(&serde_json::json!({ "items": [] }));
     }
 }

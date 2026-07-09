@@ -192,6 +192,18 @@ impl ScientexClient {
         let resp: serde_json::Value = self.http.get(&seed_stock_path(slug, stock_id)).await?;
         extract_object(resp)
     }
+
+    /// Return metadata for all available seed intake record fields.
+    ///
+    /// The response is a `SeedFieldCatalogResponse` envelope:
+    /// `{ "data": [SeedFieldMeta, ...] }`.
+    pub async fn get_seed_field_catalog(
+        &self,
+        slug: &str,
+    ) -> Result<serde_json::Value, ScientexError> {
+        let resp: serde_json::Value = self.http.get(&seed_field_catalog_path(slug)).await?;
+        Ok(envelope_data(resp))
+    }
 }
 
 fn seed_base_path(slug: &str) -> String {
@@ -281,6 +293,10 @@ fn seed_stock_path(slug: &str, stock_id: &str) -> String {
     )
 }
 
+fn seed_field_catalog_path(slug: &str) -> String {
+    format!("{}/field-catalog", seed_base_path(slug))
+}
+
 fn push_query_param(params: &mut Vec<String>, key: &str, value: Option<&str>) {
     if let Some(value) = value.filter(|value| !value.is_empty()) {
         params.push(format!("{}={}", key, url_encode(value)));
@@ -350,6 +366,18 @@ mod tests {
         assert_eq!(
             seed_stock_path("ta shan", "stock 1/a"),
             "/project/ta%20shan/seed/stocks/stock%201%2Fa"
+        );
+    }
+
+    #[test]
+    fn builds_seed_field_catalog_path() {
+        assert_eq!(
+            seed_field_catalog_path("tashan"),
+            "/project/tashan/seed/field-catalog"
+        );
+        assert_eq!(
+            seed_field_catalog_path("ta shan"),
+            "/project/ta%20shan/seed/field-catalog"
         );
     }
 }

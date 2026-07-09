@@ -139,8 +139,8 @@ pub async fn run(
                 work_order,
                 lab_id,
             } => {
-                let data = read_json_file(file)?;
-                validate_task_type_create_payload(&data)?;
+                let mut data = read_json_file(file)?;
+                validate_task_type_create_payload(&mut data)?;
                 let task_type = client
                     .create_admin_task_type(&data, lab_id.as_deref())
                     .await
@@ -447,9 +447,9 @@ fn read_json_file(path: &str) -> anyhow::Result<serde_json::Value> {
     serde_json::from_str(&content).with_context(|| format!("Cannot parse JSON file {path}"))
 }
 
-fn validate_task_type_create_payload(data: &serde_json::Value) -> anyhow::Result<()> {
+fn validate_task_type_create_payload(data: &mut serde_json::Value) -> anyhow::Result<()> {
     let obj = data
-        .as_object()
+        .as_object_mut()
         .ok_or_else(|| anyhow::anyhow!("Task type payload must be a JSON object"))?;
 
     required_non_empty_string(obj, "key")?;
@@ -459,9 +459,16 @@ fn validate_task_type_create_payload(data: &serde_json::Value) -> anyhow::Result
         let category = category
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("`category` must be a string"))?;
-        if !matches!(category, "staff" | "compute") {
+        // Backend TaskTypeCategory expects uppercase values; accept either case
+        // from the payload file and normalize before sending.
+        let normalized = category.to_ascii_uppercase();
+        if !matches!(normalized.as_str(), "STAFF" | "COMPUTE") {
             anyhow::bail!("`category` must be either `staff` or `compute`");
         }
+        obj.insert(
+            "category".to_string(),
+            serde_json::Value::String(normalized),
+        );
     }
 
     for schema_key in ["input_schema", "output_schema"] {
@@ -992,16 +999,16 @@ mod tests {
 
     #[test]
     fn validates_minimal_task_type_payload() {
-        let payload = json!({
+        let mut payload = json!({
             "key": "sample_qc",
             "display_name": "Sample QC"
         });
-        validate_task_type_create_payload(&payload).expect("payload should validate");
+        validate_task_type_create_payload(&mut payload).expect("payload should validate");
     }
 
     #[test]
     fn validates_task_type_payload_with_file_field() {
-        let payload = json!({
+        let mut payload = json!({
             "key": "plasmid_review",
             "display_name": "Plasmid Review",
             "category": "staff",
@@ -1017,32 +1024,33 @@ mod tests {
                 "required": ["plasmid_file"]
             }
         });
-        validate_task_type_create_payload(&payload).expect("payload should validate");
+        validate_task_type_create_payload(&mut payload).expect("payload should validate");
+        assert_eq!(payload["category"], "STAFF");
     }
 
     #[test]
     fn rejects_missing_key() {
-        let payload = json!({ "display_name": "Sample QC" });
-        let err =
-            validate_task_type_create_payload(&payload).expect_err("payload should be rejected");
+        let mut payload = json!({ "display_name": "Sample QC" });
+        let err = validate_task_type_create_payload(&mut payload)
+            .expect_err("payload should be rejected");
         assert!(err.to_string().contains("`key`"));
     }
 
     #[test]
     fn rejects_invalid_category() {
-        let payload = json!({
+        let mut payload = json!({
             "key": "sample_qc",
             "display_name": "Sample QC",
             "category": "experiment"
         });
-        let err =
-            validate_task_type_create_payload(&payload).expect_err("payload should be rejected");
+        let err = validate_task_type_create_payload(&mut payload)
+            .expect_err("payload should be rejected");
         assert!(err.to_string().contains("`category`"));
     }
 
     #[test]
     fn rejects_required_unknown_field() {
-        let payload = json!({
+        let mut payload = json!({
             "key": "sample_qc",
             "display_name": "Sample QC",
             "input_schema": {
@@ -1053,8 +1061,8 @@ mod tests {
                 "required": ["missing"]
             }
         });
-        let err =
-            validate_task_type_create_payload(&payload).expect_err("payload should be rejected");
+        let err = validate_task_type_create_payload(&mut payload)
+            .expect_err("payload should be rejected");
         assert!(err.to_string().contains("unknown field"));
     }
 

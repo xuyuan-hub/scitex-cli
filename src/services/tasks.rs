@@ -576,9 +576,9 @@ mod tests {
                 0,
                 20,
                 Some("ngs"),
-                Some(r#"[{"field":"category","operator":"eq","value":"compute"}]"#)
+                Some(r#"[{"field":"category","operator":"eq","value":"COMPUTE"}]"#)
             ),
-            "/task-types?skip=0&limit=20&search=ngs&filters=%5B%7B%22field%22%3A%22category%22%2C%22operator%22%3A%22eq%22%2C%22value%22%3A%22compute%22%7D%5D"
+            "/task-types?skip=0&limit=20&search=ngs&filters=%5B%7B%22field%22%3A%22category%22%2C%22operator%22%3A%22eq%22%2C%22value%22%3A%22COMPUTE%22%7D%5D"
         );
     }
 
