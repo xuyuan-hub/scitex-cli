@@ -94,6 +94,13 @@ fn pagination_metadata_json<T>(list: &PaginatedList<T>) -> String {
 
 pub fn print_pagination_metadata<T>(list: &PaginatedList<T>) {
     println!("{}", pagination_metadata_json(list));
+    // Show hint whenever the result may be incomplete:
+    // - has_next is explicitly true, OR
+    // - has_next is absent (endpoint doesn't return it) and items exist
+    let may_have_more = list.has_next != Some(false) && !list.items.is_empty();
+    if may_have_more {
+        println!("# (hint) Use --all to fetch all pages automatically.");
+    }
 }
 
 /// Print a paginated list. If the number of items on this page exceeds

@@ -312,4 +312,97 @@ mod tests {
         assert!(out.contains("\"count\": 111"));
         assert!(out.contains("\"items\""));
     }
+
+    // ── collect_all_pages tests ──────────────────────────────────
+
+    fn make_page(
+        items: Vec<Item>,
+        count: u64,
+        has_next: Option<bool>,
+    ) -> PaginatedList<Item> {
+        PaginatedList {
+            items,
+            count,
+            total_pages: None,
+            current_page: None,
+            has_next,
+            has_previous: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn collect_all_single_page() {
+        let list = crate::client::collect_all_pages(200, |_skip, _limit| {
+            std::future::ready(Ok(make_page(
+                vec![Item { id: "a".into() }, Item { id: "b".into() }],
+                2,
+                Some(false),
+            )))
+        })
+        .await
+        .expect("should succeed");
+        assert_eq!(list.items.len(), 2);
+        assert_eq!(list.count, 2);
+        assert_eq!(list.has_next, Some(false));
+    }
+
+    #[tokio::test]
+    async fn collect_all_two_pages() {
+        let mut call_count = 0u32;
+        let list = crate::client::collect_all_pages(200, |_skip, _limit| {
+            call_count += 1;
+            let (items, has_next) = if call_count == 1 {
+                (
+                    vec![Item {
+                        id: format!("page1-{}", call_count),
+                    }],
+                    Some(true),
+                )
+            } else {
+                (
+                    vec![Item {
+                        id: format!("page2-{}", call_count),
+                    }],
+                    Some(false),
+                )
+            };
+            std::future::ready(Ok(make_page(items, 2, has_next)))
+        })
+        .await
+        .expect("should succeed");
+        assert_eq!(list.items.len(), 2);
+        assert_eq!(list.count, 2);
+        assert_eq!(call_count, 2);
+    }
+
+    #[tokio::test]
+    async fn collect_all_empty() {
+        let list = crate::client::collect_all_pages(200, |_skip, _limit| {
+            std::future::ready(Ok(make_page(vec![], 0, Some(false))))
+        })
+        .await
+        .expect("should succeed");
+        assert!(list.items.is_empty());
+        assert_eq!(list.count, 0);
+    }
+
+    #[tokio::test]
+    async fn collect_all_safety_bound_stops_loop() {
+        let mut calls: u32 = 0;
+        let list = crate::client::collect_all_pages(1, |_skip, _limit| {
+            calls += 1;
+            std::future::ready(Ok(make_page(
+                vec![Item {
+                    id: format!("x-{}", calls),
+                }],
+                1,
+                Some(true), // always claims more pages — safety bound must kick in
+            )))
+        })
+        .await
+        .expect("should succeed");
+        // With max_limit=1 and 10_000 iterations, the safety bound should stop the loop.
+        assert_eq!(calls, 10_000);
+        assert_eq!(list.items.len(), 10_000);
+    }
 }

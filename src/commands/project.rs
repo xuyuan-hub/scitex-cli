@@ -97,6 +97,9 @@ pub enum SeedRecordsCommand {
         skip: u32,
         #[arg(long, default_value_t = 100)]
         limit: u32,
+        /// Fetch all pages automatically.
+        #[arg(long, default_value_t = false)]
+        all: bool,
     },
     /// List employee-visible intake records.
     Public {
@@ -106,6 +109,9 @@ pub enum SeedRecordsCommand {
         skip: u32,
         #[arg(long, default_value_t = 100)]
         limit: u32,
+        /// Fetch all pages automatically.
+        #[arg(long, default_value_t = false)]
+        all: bool,
     },
     /// Show one intake record.
     Get { record_id: String },
@@ -123,6 +129,9 @@ pub enum SeedStocksCommand {
         skip: u32,
         #[arg(long, default_value_t = 100)]
         limit: u32,
+        /// Fetch all pages automatically.
+        #[arg(long, default_value_t = false)]
+        all: bool,
     },
     /// Show one seed stock.
     Get { stock_id: String },
@@ -249,26 +258,51 @@ async fn run_seed_records(
             status,
             skip,
             limit,
+            all,
         } => {
-            let items = client
-                .list_seed_intake_records(
-                    slug,
-                    batch_id.as_deref(),
-                    status.as_deref(),
-                    *skip,
-                    *limit,
-                )
-                .await?;
+            let items = if *all {
+                let b = batch_id.clone();
+                let st = status.clone();
+                crate::client::collect_all_pages(200, |s, l| {
+                    client.list_seed_intake_records(
+                        slug,
+                        b.as_deref(),
+                        st.as_deref(),
+                        s,
+                        l,
+                    )
+                })
+                .await?
+            } else {
+                client
+                    .list_seed_intake_records(
+                        slug,
+                        batch_id.as_deref(),
+                        status.as_deref(),
+                        *skip,
+                        *limit,
+                    )
+                    .await?
+            };
             print_list_or_json(&items, format);
         }
         SeedRecordsCommand::Public {
             batch_id,
             skip,
             limit,
+            all,
         } => {
-            let items = client
-                .list_public_seed_intake_records(slug, batch_id.as_deref(), *skip, *limit)
-                .await?;
+            let items = if *all {
+                let b = batch_id.clone();
+                crate::client::collect_all_pages(200, |s, l| {
+                    client.list_public_seed_intake_records(slug, b.as_deref(), s, l)
+                })
+                .await?
+            } else {
+                client
+                    .list_public_seed_intake_records(slug, batch_id.as_deref(), *skip, *limit)
+                    .await?
+            };
             print_list_or_json(&items, format);
         }
         SeedRecordsCommand::Get { record_id } => {
@@ -297,8 +331,15 @@ async fn run_seed_stocks(
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
     match command {
-        SeedStocksCommand::List { skip, limit } => {
-            let items = client.list_seed_stocks(slug, *skip, *limit).await?;
+        SeedStocksCommand::List { skip, limit, all } => {
+            let items = if *all {
+                crate::client::collect_all_pages(200, |s, l| {
+                    client.list_seed_stocks(slug, s, l)
+                })
+                .await?
+            } else {
+                client.list_seed_stocks(slug, *skip, *limit).await?
+            };
             print_list_or_json(&items, format);
         }
         SeedStocksCommand::Get { stock_id } => {
@@ -520,6 +561,7 @@ mod tests {
                                 status,
                                 skip,
                                 limit,
+                                ..
                             },
                     },
             } => {
@@ -591,5 +633,58 @@ mod tests {
 
         // Non-array input (falls through to empty slice) should not panic
         super::print_seed_field_catalog(&serde_json::json!({ "items": [] }));
+    }
+
+    #[test]
+    fn parses_seed_stocks_list_with_all_flag() {
+        let args = parse_project(&["project", "tashan", "seed", "stocks", "list", "--all"]);
+        assert_eq!(args.slug, "tashan");
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::Stocks {
+                    command: SeedStocksCommand::List { all: true, .. }
+                }
+            }
+        ));
+    }
+
+    #[test]
+    fn seed_stocks_list_all_flag_defaults_to_false() {
+        let args = parse_project(&["project", "tashan", "seed", "stocks", "list"]);
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::Stocks {
+                    command: SeedStocksCommand::List { all: false, .. }
+                }
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_seed_records_list_with_all_flag() {
+        let args = parse_project(&["project", "tashan", "seed", "records", "list", "--all"]);
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::Records {
+                    command: SeedRecordsCommand::List { all: true, .. }
+                }
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_seed_records_public_with_all_flag() {
+        let args = parse_project(&["project", "tashan", "seed", "records", "public", "--all"]);
+        assert!(matches!(
+            args.command,
+            ProjectCommand::Seed {
+                command: SeedCommand::Records {
+                    command: SeedRecordsCommand::Public { all: true, .. }
+                }
+            }
+        ));
     }
 }
