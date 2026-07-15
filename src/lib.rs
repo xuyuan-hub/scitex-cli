@@ -3,6 +3,7 @@ pub mod auth;
 pub mod client;
 pub mod commands;
 pub mod config;
+pub mod embedded_skills;
 pub mod error_history;
 pub mod errors;
 mod http;

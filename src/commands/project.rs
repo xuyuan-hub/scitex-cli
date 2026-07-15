@@ -264,13 +264,7 @@ async fn run_seed_records(
                 let b = batch_id.clone();
                 let st = status.clone();
                 crate::client::collect_all_pages(200, |s, l| {
-                    client.list_seed_intake_records(
-                        slug,
-                        b.as_deref(),
-                        st.as_deref(),
-                        s,
-                        l,
-                    )
+                    client.list_seed_intake_records(slug, b.as_deref(), st.as_deref(), s, l)
                 })
                 .await?
             } else {
@@ -333,10 +327,8 @@ async fn run_seed_stocks(
     match command {
         SeedStocksCommand::List { skip, limit, all } => {
             let items = if *all {
-                crate::client::collect_all_pages(200, |s, l| {
-                    client.list_seed_stocks(slug, s, l)
-                })
-                .await?
+                crate::client::collect_all_pages(200, |s, l| client.list_seed_stocks(slug, s, l))
+                    .await?
             } else {
                 client.list_seed_stocks(slug, *skip, *limit).await?
             };
@@ -364,10 +356,7 @@ async fn run_seed_field_catalog(
 }
 
 fn print_seed_field_catalog(data: &serde_json::Value) {
-    let items = data
-        .as_array()
-        .map(|a| a.as_slice())
-        .unwrap_or_default();
+    let items = data.as_array().map(|a| a.as_slice()).unwrap_or_default();
     if items.is_empty() {
         println!("暂无字段元数据");
         return;
@@ -380,11 +369,11 @@ fn print_seed_field_catalog(data: &serde_json::Value) {
         let key = item.get("key").and_then(|v| v.as_str()).unwrap_or("-");
         let label = item.get("label").and_then(|v| v.as_str()).unwrap_or("-");
         let field_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("-");
-        let category = item
-            .get("category")
-            .and_then(|v| v.as_str())
-            .unwrap_or("-");
-        println!("{:<24}  {:<12}  {:<8}  {}", key, label, field_type, category);
+        let category = item.get("category").and_then(|v| v.as_str()).unwrap_or("-");
+        println!(
+            "{:<24}  {:<12}  {:<8}  {}",
+            key, label, field_type, category
+        );
         if let Some(desc) = item.get("description").and_then(|v| v.as_str()) {
             if !desc.is_empty() {
                 println!("  {}", desc);

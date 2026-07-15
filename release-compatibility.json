@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "backend_repository": "xuyuan-hub/scientex",
+  "backend_commit": null,
+  "openapi": {
+    "baseline_date": "2026-07-09",
+    "info_version": "0.1.0",
+    "fixture": "tests/fixtures/openapi.json",
+    "fixture_sha256": "576ae947d8c0280a58cb595b1d598939be90141122f3ec451f82d19200ea9d2c"
+  },
+  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to this pinned OpenAPI fixture."
+}

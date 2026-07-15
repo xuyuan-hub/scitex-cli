@@ -113,9 +113,6 @@ scitex login
 
 ```bash
 # Universal — supports Hermes, Claude Code, Codex, Cursor, OpenCode, and other skills-compatible agents
-npx -y skills add xuyuan-hub/scitex-cli -y -g
-
-# Equivalent via the CLI
 scitex skills install --global
 ```
 
@@ -129,7 +126,7 @@ If this returns user info, the setup is complete.
 
 ## AI Agent Skills
 
-After installing skills via `npx skills add` or `scitex skills install`, the Agent gains access to the following structured skills. `scitex skills install` delegates to the standard `skills` installer so Hermes and other agents can refresh their own skill indexes correctly.
+After running `scitex skills install`, the Agent gains access to the following structured skills. Every Release binary contains the matching Skills and compatibility metadata. The command materializes those bundled files locally and delegates agent-specific placement to the standard `skills` installer, so it never installs unreleased Skills from the repository's default branch.
 
 | Skill | Description |
 |-------|-------------|
@@ -147,7 +144,7 @@ After installing skills via `npx skills add` or `scitex skills install`, the Age
 | `scitex-users` | Login status, authenticated profile, contact fields, password changes |
 | `scitex-error-report` | Categorize and submit a client error report when the CLI misbehaves |
 
-The Agent skills are installed by the standard `skills` installer. Domain skills point back to `scitex-shared` for auth and OpenAPI schema rules. Not every backend capability has CLI coverage yet — see `docs/命令参考.md` for the authoritative, up-to-date command list before assuming a command exists.
+The Agent skills are bundled with the CLI Release and placed by the standard `skills` installer in copy mode. Domain skills point back to `scitex-shared` for auth and OpenAPI schema rules. Not every backend capability has CLI coverage yet — see `docs/命令参考.md` for the authoritative, up-to-date command list before assuming a command exists.
 
 ## Project Boundary
 
@@ -424,15 +421,14 @@ scitex me -f json
 
 ## AI Agent Skills
 
-执行以下任一命令后，Agent 可使用以下结构化 skills：
+执行以下命令后，Agent 可使用与当前 CLI Release 完全匹配的结构化 Skills：
 
 ```bash
-# 通用安装（支持 Hermes、Claude Code、Codex、Cursor、OpenCode 等兼容 skills 的 agent）
-npx -y skills add xuyuan-hub/scitex-cli -y -g
-
-# 或使用 CLI 安装；会委托给 npx skills add
+# 支持 Hermes、Claude Code、Codex、Cursor、OpenCode 等兼容 Skills 的 Agent
 scitex skills install --global
 ```
+
+每个 Release 二进制都内嵌了对应版本的 Skills 和兼容性元数据。该命令先在本地展开内嵌内容，再委托标准 `skills` 安装器以复制模式放置文件，不会从仓库默认分支安装尚未发布的 Skills。
 
 | Skill | 描述 |
 |-------|------|

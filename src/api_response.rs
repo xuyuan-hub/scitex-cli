@@ -315,11 +315,7 @@ mod tests {
 
     // ── collect_all_pages tests ──────────────────────────────────
 
-    fn make_page(
-        items: Vec<Item>,
-        count: u64,
-        has_next: Option<bool>,
-    ) -> PaginatedList<Item> {
+    fn make_page(items: Vec<Item>, count: u64, has_next: Option<bool>) -> PaginatedList<Item> {
         PaginatedList {
             items,
             count,

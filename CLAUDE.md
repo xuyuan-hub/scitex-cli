@@ -120,8 +120,8 @@ src/
 - **Custom deserializers**: `string_or_f64` / `opt_string_or_f64` in `types.rs` — backend sometimes returns numeric fields as JSON strings
 - **Errors**: `ScientexError` in `src/errors.rs` (not `error.rs` — avoids collision with `std::error`)
 - **Output modes**: `-f json` for machine-readable, default text for human (colored status badges)
-- **Agent skills**: `scitex skills install` delegates to `npx skills add xuyuan-hub/scitex-cli`, so supported agents refresh their own skill indexes.
-- **Tests**: `cargo test` must pass before every submission — CI gate enforces this. Current baseline: 144 lib unit tests + 24 OpenAPI contract tests (1 intentionally `#[ignore]`d) + 4 `#[ignore]`d live-backend tests in `tests/admin_task_types_live.rs` / `tests/feishu_dual_link_live.rs`; see `tests/openapi_contract.rs`. Re-check the actual count with `cargo test -q -- --list` before quoting it elsewhere — it drifts every time a domain gets new coverage.
+- **Agent skills**: Release builds embed `skills/**` and `release-compatibility.json` in the binary. `scitex skills install` materializes that exact bundled version and delegates local placement to `npx skills add --copy`, so supported agents refresh their indexes without reading the repository's default branch.
+- **Tests**: `cargo test` must pass before every submission — CI gate enforces this. Current baseline: 166 lib unit tests + 25 OpenAPI contract tests (1 intentionally `#[ignore]`d) + 5 `#[ignore]`d live-backend/E2E tests in `tests/admin_task_types_live.rs`, `tests/e2e_seed_intake.rs`, and `tests/feishu_dual_link_live.rs`; see `tests/openapi_contract.rs`. Re-check the actual count with `cargo test -q -- --list` before quoting it elsewhere — it drifts every time a domain gets new coverage.
 
 ### API Base URL
 
@@ -129,9 +129,9 @@ Default: `http://8.136.56.203/api/v1` — overrideable via `SCIENTEX_BASE_URL` e
 
 ### Agent Skills
 
-AI agent skills (SKILL.md files) live under `skills/` — this directory is tracked in git.
+AI agent skills (SKILL.md files) live under `skills/` — this directory is tracked in git and embedded into every CLI build by `build.rs`.
 The `.agents/skills/` directory is **gitignored** and contains symlinks managed by
-the skills installer (`scitex skills install` / `npx skills add`). When adding or
+the skills installer (`scitex skills install`). When adding or
 editing a skill, always work in `skills/scitex-<name>/SKILL.md`, never in `.agents/`.
 
 ## Business Domain

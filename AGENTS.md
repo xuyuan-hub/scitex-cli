@@ -7,7 +7,7 @@ Tool-agnostic entry point for coding agents (Codex, Cursor, OpenCode, Copilot, e
 | | Reads | Purpose |
 |---|---|---|
 | **Contributor agent** (you, right now) | `AGENTS.md` (this file), `CLAUDE.md` | Modifies the `scitex-cli` Rust source, tests, and skill files themselves |
-| **End-user agent** | `skills/*/SKILL.md` (installed via `npx skills add xuyuan-hub/scitex-cli` or `scitex skills install`) | Operates the *built* `scitex` binary on behalf of a lab user — creates orders, checks inventory, etc. |
+| **End-user agent** | `skills/*/SKILL.md` (bundled with each Release and installed via `scitex skills install`) | Operates the *built* `scitex` binary on behalf of a lab user — creates orders, checks inventory, etc. |
 
 If you were invoked to help a user "place an order" or "check inventory" against a running Scientex lab, you almost certainly want the end-user skills under `skills/`, not this file. This file is for changing how `scitex-cli` itself is built.
 

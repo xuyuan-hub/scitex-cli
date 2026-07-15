@@ -335,7 +335,17 @@ mod tests {
     #[test]
     fn status_colored_handles_lowercase_and_uppercase() {
         // Order statuses (lowercase)
-        for s in ["pending", "received", "completed", "done", "failed", "cancelled", "rejected", "processing", "in_progress"] {
+        for s in [
+            "pending",
+            "received",
+            "completed",
+            "done",
+            "failed",
+            "cancelled",
+            "rejected",
+            "processing",
+            "in_progress",
+        ] {
             let colored = super::status_colored(s);
             assert!(
                 colored.to_string().contains(s),
@@ -343,7 +353,15 @@ mod tests {
             );
         }
         // Task statuses (uppercase)
-        for s in ["PENDING_ASSIGNMENT", "ASSIGNED", "IN_PROGRESS", "WAITING_LAB_CONFIRM", "COMPLETED", "FAILED", "CANCELLED"] {
+        for s in [
+            "PENDING_ASSIGNMENT",
+            "ASSIGNED",
+            "IN_PROGRESS",
+            "WAITING_LAB_CONFIRM",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED",
+        ] {
             let colored = super::status_colored(s);
             assert!(
                 colored.to_string().contains(s),
@@ -351,7 +369,16 @@ mod tests {
             );
         }
         // Part statuses (uppercase, including BLOCKED)
-        for s in ["LOCKED", "READY", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED", "PENDING", "BLOCKED"] {
+        for s in [
+            "LOCKED",
+            "READY",
+            "IN_PROGRESS",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED",
+            "PENDING",
+            "BLOCKED",
+        ] {
             let colored = super::status_colored(s);
             assert!(
                 colored.to_string().contains(s),

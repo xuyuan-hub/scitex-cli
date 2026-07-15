@@ -1,12 +1,14 @@
 use std::io::Read;
 use std::path::Path;
 
+use anyhow::Context;
 use clap::{Args, Subcommand};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::commands::skills;
+use crate::embedded_skills::create_temp_dir;
 use crate::output::{print_result, OutputFormat};
 
 const LATEST_RELEASE_API: &str =
@@ -181,10 +183,21 @@ async fn install_latest(global_skills: bool) -> anyhow::Result<()> {
         bin_bytes
     };
 
-    let current_exe = std::env::current_exe()?;
-    replace_binary(&new_binary, &current_exe)?;
+    println!("Installing Skills bundled with v{} ...", latest_version);
+    install_skills_from_binary(&new_binary, &latest_version, global_skills)?;
 
-    skills::install_with_skills_cli(global_skills)?;
+    let current_exe = std::env::current_exe()?;
+    if let Err(replace_error) = replace_binary(&new_binary, &current_exe) {
+        let rollback = skills::install_with_skills_cli(global_skills);
+        return match rollback {
+            Ok(()) => Err(replace_error).context(
+                "failed to replace the CLI binary; restored Skills bundled with the current CLI",
+            ),
+            Err(rollback_error) => Err(replace_error).context(format!(
+                "failed to replace the CLI binary and failed to restore current Skills: {rollback_error}"
+            )),
+        };
+    }
 
     println!();
     println!("{}", "Update complete.".green().bold());
@@ -192,6 +205,85 @@ async fn install_latest(global_skills: bool) -> anyhow::Result<()> {
         println!(
             "The new binary will be applied when this process exits. \
              Please restart your terminal."
+        );
+    }
+    Ok(())
+}
+
+struct StagedBinary {
+    root: std::path::PathBuf,
+    path: std::path::PathBuf,
+}
+
+impl StagedBinary {
+    fn create(bytes: &[u8]) -> anyhow::Result<Self> {
+        let root = create_temp_dir("scitex-update")?;
+        let filename = if cfg!(windows) {
+            "scitex.exe"
+        } else {
+            "scitex"
+        };
+        let path = root.join(filename);
+        let staged = Self { root, path };
+        std::fs::write(&staged.path, bytes).with_context(|| {
+            format!(
+                "failed to stage new CLI binary at {}",
+                staged.path.display()
+            )
+        })?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&staged.path, std::fs::Permissions::from_mode(0o755))?;
+        }
+
+        Ok(staged)
+    }
+}
+
+impl Drop for StagedBinary {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+fn install_skills_from_binary(
+    binary: &[u8],
+    expected_version: &str,
+    global: bool,
+) -> anyhow::Result<()> {
+    let staged = StagedBinary::create(binary)?;
+    let version_output = std::process::Command::new(&staged.path)
+        .arg("--version")
+        .output()
+        .context("failed to execute the staged CLI binary")?;
+    if !version_output.status.success() {
+        anyhow::bail!("staged CLI binary failed its version check");
+    }
+
+    let reported_version = String::from_utf8_lossy(&version_output.stdout);
+    let reported_version = reported_version.split_whitespace().last().unwrap_or("");
+    if reported_version.trim_start_matches('v') != expected_version.trim_start_matches('v') {
+        anyhow::bail!(
+            "staged CLI version mismatch: release is v{}, binary reports {}",
+            expected_version.trim_start_matches('v'),
+            reported_version
+        );
+    }
+
+    let mut command = std::process::Command::new(&staged.path);
+    command.args(["skills", "install"]);
+    if global {
+        command.arg("--global");
+    }
+    let status = command
+        .status()
+        .context("failed to install Skills from the staged CLI binary")?;
+    if !status.success() {
+        anyhow::bail!(
+            "staged scitex v{} failed to install its bundled Skills",
+            expected_version.trim_start_matches('v')
         );
     }
     Ok(())
