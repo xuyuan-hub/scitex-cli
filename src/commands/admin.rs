@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
 use serde::Serialize;
 
 use crate::client::ScientexClient;
 use crate::config::Config;
 use crate::errors::ScientexError;
-use crate::output::{print_result, OutputFormat};
+use crate::output::{print_result, unique_output_path, OutputFormat};
 use crate::types::{StaffUserInfo, TaskResult, TaskTypeDocument};
 
 #[derive(Args)]
@@ -24,10 +24,194 @@ pub enum AdminCommand {
         #[command(subcommand)]
         command: AdminTaskTypesCommand,
     },
+    /// Platform-wide task administration.
+    Tasks {
+        #[command(subcommand)]
+        command: AdminTasksCommand,
+    },
+    /// Query users eligible for task assignment.
+    Users {
+        #[command(subcommand)]
+        command: AdminUsersCommand,
+    },
+    /// Inspect submitted client error reports.
+    ErrorReports {
+        #[command(subcommand)]
+        command: AdminErrorReportsCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AdminUsersCommand {
+    /// List users eligible for task assignments.
+    Staff {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AdminErrorReportsCommand {
+    /// List error reports.
+    List {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+        #[arg(long)]
+        category: Option<ErrorCategoryFilterArg>,
+    },
+    /// Show one error report.
+    Get { id: String },
+}
+
+#[derive(Subcommand)]
+pub enum AdminTasksCommand {
+    /// List tasks across labs.
+    List {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+    },
+    /// Show one task across labs.
+    Get { id: String },
+    /// Show full workflow detail.
+    Workflow { id: String },
+    /// Update a task from a JSON file.
+    Update { id: String, file: String },
+    /// Cancel a task.
+    Cancel { id: String },
+    /// Manage task parts.
+    Parts {
+        #[command(subcommand)]
+        command: AdminTaskPartsCommand,
+    },
+    /// Manage task assignments.
+    Assignments {
+        #[command(subcommand)]
+        command: AdminTaskAssignmentsCommand,
+    },
+    /// Manage task documents.
+    Documents {
+        #[command(subcommand)]
+        command: AdminTaskDocumentsCommand,
+    },
+    /// List task results.
+    Results { id: String },
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum ErrorCategoryFilterArg {
+    #[value(name = "ui-display")]
+    UiDisplay,
+    Functional,
+    Data,
+    Performance,
+    Permission,
+    Other,
+}
+
+impl ErrorCategoryFilterArg {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::UiDisplay => "ui-display",
+            Self::Functional => "functional",
+            Self::Data => "data",
+            Self::Performance => "performance",
+            Self::Permission => "permission",
+            Self::Other => "other",
+        }
+    }
+}
+
+#[derive(Subcommand)]
+pub enum AdminTaskPartsCommand {
+    /// Show one task part.
+    Get { task_id: String, part_id: String },
+    /// Add a task part.
+    Add {
+        task_id: String,
+        name: String,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        sort_order: i64,
+    },
+    /// Update a task part from a JSON file.
+    Update {
+        task_id: String,
+        part_id: String,
+        file: String,
+    },
+    /// Delete a task part.
+    Delete { task_id: String, part_id: String },
+}
+
+#[derive(Subcommand)]
+pub enum AdminTaskAssignmentsCommand {
+    /// Assign a user to a task part.
+    Add {
+        task_id: String,
+        part_id: String,
+        assignee_id: String,
+        #[arg(long, default_value = "assignee")]
+        role: String,
+    },
+    /// Remove an assignment.
+    Remove {
+        task_id: String,
+        assignment_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum AdminTaskDocumentsCommand {
+    /// List documents for a task.
+    List { task_id: String },
+    /// Upload a task document.
+    Upload {
+        task_id: String,
+        file: String,
+        #[arg(long)]
+        document_type: String,
+        #[arg(long, default_value = "lab_and_staff")]
+        visibility: String,
+        #[arg(long)]
+        part_id: Option<String>,
+    },
+    /// Download a task document.
+    Download {
+        document_id: String,
+        output: Option<String>,
+    },
+    /// Delete a task document.
+    Delete {
+        task_id: String,
+        document_id: String,
+    },
 }
 
 #[derive(Subcommand)]
 pub enum AdminTaskTypesCommand {
+    /// List and search the global task type catalog.
+    List {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+        #[arg(long)]
+        search: Option<String>,
+        /// Administrator filters encoded as a JSON array.
+        #[arg(long)]
+        filters: Option<String>,
+    },
+    /// Show one global task type definition.
+    Get { id: String },
+    /// Update a global task type definition from a JSON file.
+    Update { id: String, file: String },
     /// Create a task type from a JSON file.
     Create {
         file: String,
@@ -123,6 +307,10 @@ struct StaffBindingChange<'a> {
 }
 
 const VALID_DOCUMENT_TYPES: &[&str] = &["sop", "work_order", "attachment"];
+const VALID_TASK_DOCUMENT_TYPES: &[&str] =
+    &["sop", "work_order", "attachment", "result_attachment"];
+const VALID_DOCUMENT_VISIBILITIES: &[&str] = &["lab_and_staff", "staff_only", "lab_only"];
+const VALID_ASSIGNMENT_ROLES: &[&str] = &["assignee", "reviewer", "helper"];
 
 pub async fn run(
     args: &AdminArgs,
@@ -133,6 +321,33 @@ pub async fn run(
 
     match &args.command {
         AdminCommand::TaskTypes { command } => match command {
+            AdminTaskTypesCommand::List {
+                skip,
+                limit,
+                search,
+                filters,
+            } => {
+                let task_types = client
+                    .list_admin_task_types(*skip, *limit, search.as_deref(), filters.as_deref())
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&task_types, format);
+            }
+            AdminTaskTypesCommand::Get { id } => {
+                let task_type = client
+                    .get_admin_task_type(id)
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&task_type, format);
+            }
+            AdminTaskTypesCommand::Update { id, file } => {
+                let data = read_json_file(file)?;
+                let task_type = client
+                    .update_admin_task_type(id, &data)
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&task_type, format);
+            }
             AdminTaskTypesCommand::Create {
                 file,
                 sop,
@@ -273,8 +488,264 @@ pub async fn run(
                 }
             }
         },
+        AdminCommand::Tasks { command } => {
+            run_admin_tasks(&client, command, format).await?;
+        }
+        AdminCommand::Users { command } => match command {
+            AdminUsersCommand::Staff { skip, limit } => {
+                let users = client
+                    .list_staff_users(*skip, *limit)
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&users, format);
+            }
+        },
+        AdminCommand::ErrorReports { command } => match command {
+            AdminErrorReportsCommand::List {
+                skip,
+                limit,
+                category,
+            } => {
+                let reports = client
+                    .list_error_reports(
+                        *skip,
+                        *limit,
+                        category.as_ref().map(|value| value.as_str()),
+                    )
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&reports, format);
+            }
+            AdminErrorReportsCommand::Get { id } => {
+                let report = client
+                    .get_error_report(id)
+                    .await
+                    .map_err(admin_operation_error)?;
+                print_result(&report, format);
+            }
+        },
     }
 
+    Ok(())
+}
+
+async fn run_admin_tasks(
+    client: &ScientexClient,
+    command: &AdminTasksCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        AdminTasksCommand::List { skip, limit } => {
+            let tasks = client
+                .list_tasks(*skip, *limit)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&tasks, format);
+        }
+        AdminTasksCommand::Get { id } => {
+            let task = client.get_task(id).await.map_err(admin_operation_error)?;
+            print_result(&task, format);
+        }
+        AdminTasksCommand::Workflow { id } => {
+            let workflow = client
+                .get_task_workflow(id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&workflow, format);
+        }
+        AdminTasksCommand::Update { id, file } => {
+            let data = read_json_file(file)?;
+            let task = client
+                .update_task(id, &data)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&task, format);
+        }
+        AdminTasksCommand::Cancel { id } => {
+            let result = client
+                .cancel_task(id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&result, format);
+        }
+        AdminTasksCommand::Parts { command } => {
+            run_admin_task_parts(client, command, format).await?;
+        }
+        AdminTasksCommand::Assignments { command } => {
+            run_admin_task_assignments(client, command, format).await?;
+        }
+        AdminTasksCommand::Documents { command } => {
+            run_admin_task_documents(client, command, format).await?;
+        }
+        AdminTasksCommand::Results { id } => {
+            let results = client
+                .list_task_results(id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&results, format);
+        }
+    }
+    Ok(())
+}
+
+async fn run_admin_task_parts(
+    client: &ScientexClient,
+    command: &AdminTaskPartsCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        AdminTaskPartsCommand::Get { task_id, part_id } => {
+            let part = client
+                .get_task_part(task_id, part_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&part, format);
+        }
+        AdminTaskPartsCommand::Add {
+            task_id,
+            name,
+            description,
+            sort_order,
+        } => {
+            let part = client
+                .add_task_part(task_id, name, description.as_deref(), *sort_order)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&part, format);
+        }
+        AdminTaskPartsCommand::Update {
+            task_id,
+            part_id,
+            file,
+        } => {
+            let data = read_json_file(file)?;
+            let part = client
+                .update_task_part(task_id, part_id, &data)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&part, format);
+        }
+        AdminTaskPartsCommand::Delete { task_id, part_id } => {
+            client
+                .delete_task_part(task_id, part_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(
+                &serde_json::json!({"task_id": task_id, "part_id": part_id, "deleted": true}),
+                format,
+            );
+        }
+    }
+    Ok(())
+}
+
+async fn run_admin_task_assignments(
+    client: &ScientexClient,
+    command: &AdminTaskAssignmentsCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        AdminTaskAssignmentsCommand::Add {
+            task_id,
+            part_id,
+            assignee_id,
+            role,
+        } => {
+            validate_assignment_role(role)?;
+            let assignment = client
+                .create_task_assignment(task_id, part_id, assignee_id, role)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&assignment, format);
+        }
+        AdminTaskAssignmentsCommand::Remove {
+            task_id,
+            assignment_id,
+        } => {
+            client
+                .delete_task_assignment(task_id, assignment_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(
+                &serde_json::json!({
+                    "task_id": task_id,
+                    "assignment_id": assignment_id,
+                    "removed": true
+                }),
+                format,
+            );
+        }
+    }
+    Ok(())
+}
+
+async fn run_admin_task_documents(
+    client: &ScientexClient,
+    command: &AdminTaskDocumentsCommand,
+    format: &OutputFormat,
+) -> anyhow::Result<()> {
+    match command {
+        AdminTaskDocumentsCommand::List { task_id } => {
+            let documents = client
+                .list_task_documents(task_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&documents, format);
+        }
+        AdminTaskDocumentsCommand::Upload {
+            task_id,
+            file,
+            document_type,
+            visibility,
+            part_id,
+        } => {
+            validate_task_document_type(document_type)?;
+            validate_document_visibility(visibility)?;
+            let document = client
+                .upload_task_document(
+                    task_id,
+                    file,
+                    document_type,
+                    Some(visibility),
+                    part_id.as_deref(),
+                )
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(&document, format);
+        }
+        AdminTaskDocumentsCommand::Download {
+            document_id,
+            output,
+        } => {
+            let bytes = client
+                .download_task_document(document_id)
+                .await
+                .map_err(admin_operation_error)?;
+            let output = output
+                .clone()
+                .unwrap_or_else(|| format!("task_document_{document_id}"));
+            let output_path = unique_output_path(output);
+            std::fs::write(&output_path, bytes)?;
+            println!("Downloaded to {}", output_path.display());
+        }
+        AdminTaskDocumentsCommand::Delete {
+            task_id,
+            document_id,
+        } => {
+            client
+                .delete_task_document(task_id, document_id)
+                .await
+                .map_err(admin_operation_error)?;
+            print_result(
+                &serde_json::json!({
+                    "task_id": task_id,
+                    "document_id": document_id,
+                    "deleted": true
+                }),
+                format,
+            );
+        }
+    }
     Ok(())
 }
 
@@ -593,6 +1064,42 @@ fn validate_document_type(doc_type: &str) -> anyhow::Result<()> {
     }
 }
 
+fn validate_task_document_type(doc_type: &str) -> anyhow::Result<()> {
+    if VALID_TASK_DOCUMENT_TYPES.contains(&doc_type) {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Invalid task document type '{}'. Must be one of: {}",
+            doc_type,
+            VALID_TASK_DOCUMENT_TYPES.join(", ")
+        )
+    }
+}
+
+fn validate_document_visibility(visibility: &str) -> anyhow::Result<()> {
+    if VALID_DOCUMENT_VISIBILITIES.contains(&visibility) {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Invalid document visibility '{}'. Must be one of: {}",
+            visibility,
+            VALID_DOCUMENT_VISIBILITIES.join(", ")
+        )
+    }
+}
+
+fn validate_assignment_role(role: &str) -> anyhow::Result<()> {
+    if VALID_ASSIGNMENT_ROLES.contains(&role) {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "Invalid assignment role '{}'. Must be one of: {}",
+            role,
+            VALID_ASSIGNMENT_ROLES.join(", ")
+        )
+    }
+}
+
 fn required_non_empty_string(
     obj: &serde_json::Map<String, serde_json::Value>,
     field: &str,
@@ -660,6 +1167,98 @@ mod tests {
             } => assert_eq!(file, "task-type.json"),
             _ => panic!("expected admin task-types create command"),
         }
+    }
+
+    #[test]
+    fn parses_task_type_list_get_and_update() {
+        let list = parse_admin(&["admin", "task-types", "list", "--search", "sample qc"]);
+        assert!(matches!(
+            list.command,
+            AdminCommand::TaskTypes {
+                command: AdminTaskTypesCommand::List { .. }
+            }
+        ));
+
+        let get = parse_admin(&["admin", "task-types", "get", "type-1"]);
+        assert!(matches!(
+            get.command,
+            AdminCommand::TaskTypes {
+                command: AdminTaskTypesCommand::Get { .. }
+            }
+        ));
+
+        let update = parse_admin(&["admin", "task-types", "update", "type-1", "update.json"]);
+        assert!(matches!(
+            update.command,
+            AdminCommand::TaskTypes {
+                command: AdminTaskTypesCommand::Update { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_admin_task_management_commands() {
+        let cancel = parse_admin(&["admin", "tasks", "cancel", "task-1"]);
+        assert!(matches!(
+            cancel.command,
+            AdminCommand::Tasks {
+                command: AdminTasksCommand::Cancel { .. }
+            }
+        ));
+
+        let part = parse_admin(&[
+            "admin",
+            "tasks",
+            "parts",
+            "add",
+            "task-1",
+            "QC",
+            "--sort-order",
+            "20",
+        ]);
+        assert!(matches!(
+            part.command,
+            AdminCommand::Tasks {
+                command: AdminTasksCommand::Parts { .. }
+            }
+        ));
+
+        let assignment = parse_admin(&[
+            "admin",
+            "tasks",
+            "assignments",
+            "add",
+            "task-1",
+            "part-1",
+            "user-1",
+            "--role",
+            "reviewer",
+        ]);
+        assert!(matches!(
+            assignment.command,
+            AdminCommand::Tasks {
+                command: AdminTasksCommand::Assignments { .. }
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_admin_staff_and_error_report_queries() {
+        let staff = parse_admin(&["admin", "users", "staff", "--limit", "50"]);
+        assert!(matches!(
+            staff.command,
+            AdminCommand::Users {
+                command: AdminUsersCommand::Staff { limit: 50, .. }
+            }
+        ));
+
+        let reports = parse_admin(&["admin", "error-reports", "list", "--category", "permission"]);
+        assert!(matches!(
+            reports.command,
+            AdminCommand::ErrorReports {
+                command: AdminErrorReportsCommand::List { .. }
+            }
+        ));
     }
 
     #[test]

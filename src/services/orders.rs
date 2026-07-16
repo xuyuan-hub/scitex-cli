@@ -37,8 +37,15 @@ impl ScientexClient {
         extract_object(resp)
     }
 
-    pub async fn get_order_stats(&self) -> Result<serde_json::Value, ScientexError> {
-        let resp: serde_json::Value = self.http.get("/orders/stats").await?;
+    pub async fn get_order_stats(
+        &self,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<serde_json::Value, ScientexError> {
+        let resp: serde_json::Value = self
+            .http
+            .get(&order_stats_path(start_date, end_date))
+            .await?;
         Ok(envelope_data(resp))
     }
 
@@ -186,6 +193,21 @@ fn order_path(order_id: &str) -> String {
     format!("/orders/{}", path_segment_encode(order_id))
 }
 
+fn order_stats_path(start_date: Option<&str>, end_date: Option<&str>) -> String {
+    let mut path = "/orders/stats".to_string();
+    let mut separator = '?';
+    for (name, value) in [("start_date", start_date), ("end_date", end_date)] {
+        if let Some(value) = value.filter(|value| !value.is_empty()) {
+            path.push(separator);
+            separator = '&';
+            path.push_str(name);
+            path.push('=');
+            path.push_str(&url_encode(value));
+        }
+    }
+    path
+}
+
 fn send_order_path(order_id: &str) -> String {
     format!("/orders/{}/send", path_segment_encode(order_id))
 }
@@ -207,6 +229,15 @@ mod tests {
         assert_eq!(
             list_orders_path(20, 50, None, None, None, None, None, None, None),
             "/orders/?skip=20&limit=50"
+        );
+    }
+
+    #[test]
+    fn builds_order_stats_path_with_dates() {
+        assert_eq!(order_stats_path(None, None), "/orders/stats");
+        assert_eq!(
+            order_stats_path(Some("2026-07-01"), Some("2026-07-31")),
+            "/orders/stats?start_date=2026-07-01&end_date=2026-07-31"
         );
     }
 

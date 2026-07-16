@@ -28,7 +28,7 @@ Before API calls, read `../scitex-shared/SKILL.md`.
 
 This skill defaults to the **Lab tasks** view. Create, list, get, documents, upload-field, results, confirm, and reject commands operate through `/lab/tasks` and are scoped to the current lab or explicit `--lab-id`.
 
-Do not use `scitex tasks workflow`, `tasks update`, or `tasks update-file` for a normal lab member: those are the platform administrator's global `/tasks` view. Use `scitex tasks my ...` only when the authenticated staff member needs their own assigned task stages; it is neither a lab list nor a creator-filtered list.
+Do not use `scitex admin tasks ...` for a normal lab member: it is the platform administrator's global `/tasks` view. The old `scitex tasks workflow/update/update-file` aliases are hidden compatibility commands and must not be used for new workflows. Use `scitex tasks my ...` only when the authenticated staff member needs their own assigned task stages; it is neither a lab list nor a creator-filtered list.
 
 ## Core Rule
 
@@ -213,6 +213,20 @@ For compute-only workflows, a dependent compute stage may move from `LOCKED` to 
 
 Do not hardcode `lab_id` into JSON payloads. The CLI will use the current lab or the user can pass `--lab-id`.
 
+## File Inputs
+
+For direct task creation, attach local files without inventing a reference shape:
+
+```bash
+scitex tasks create task.json --file-field field_key=path/to/input.bin -f json
+```
+
+When preparing an `input_data` object separately, upload first and use the returned object exactly:
+
+```bash
+scitex files upload path/to/input.bin -f json
+```
+
 ## Required Input Checks
 
 If `input_schema.required` exists for a matched task type, ensure required fields are present before creating the task.
@@ -267,7 +281,20 @@ scitex tasks get <TASK_ID> -f json
 scitex tasks results <TASK_ID> -f json
 ```
 
-The backend currently exposes no lab-scoped workflow-detail endpoint. Exact stage graph, dependencies, and assignments are available only through `scitex tasks workflow <TASK_ID> -f json`, the global platform-admin view. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
+Use `scitex tasks part <TASK_ID> <PART_ID> -f json` when the lab-visible part ID is already known. The backend exposes no lab-scoped full workflow-detail endpoint. Exact stage graph, dependencies, and assignments are available only through `scitex admin tasks workflow <TASK_ID> -f json`, the global platform-admin view. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
+
+## Staff Assignment Completion
+
+Use the staff view only for stages assigned to the authenticated employee:
+
+```bash
+scitex tasks my list --search <keyword> --exclude-status completed -f json
+scitex tasks my get <ASSIGNMENT_ID> -f json
+scitex tasks my upload-field <TASK_ID> <FILE> <FIELD_KEY> --visibility lab-and-staff -f json
+scitex tasks my complete <ASSIGNMENT_ID> result.json [--feedback feedback.json] -f json
+```
+
+Prefer `tasks my complete` for normal completion because it atomically submits the result, completes the assignment, and unlocks downstream stages. Use `submit-result` or `status` separately only when the user explicitly needs a partial or staged action. Writable assignment statuses are `pending`, `in-progress`, and `completed`; `BLOCKED` is a task-part status, not an assignment status.
 
 ## Reading Results
 

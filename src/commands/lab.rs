@@ -24,11 +24,46 @@ pub enum LabCommand {
     /// Update lab settings with a JSON object.
     Update { data: String },
     /// List all orders in my lab.
-    Orders,
+    Orders {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+        #[arg(long)]
+        order_type: Option<String>,
+        #[arg(long)]
+        supplier_name: Option<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        price_min: Option<String>,
+        #[arg(long)]
+        price_max: Option<String>,
+        #[arg(long)]
+        date_from: Option<String>,
+        #[arg(long)]
+        date_to: Option<String>,
+    },
     /// Show lab order statistics.
-    OrdersStats,
+    OrdersStats {
+        #[arg(long)]
+        start_date: Option<String>,
+        #[arg(long)]
+        end_date: Option<String>,
+    },
     /// List shared lab inventory.
-    Inventory,
+    Inventory {
+        #[arg(long, default_value_t = 0)]
+        skip: u32,
+        #[arg(long, default_value_t = 100)]
+        limit: u32,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        location_id: Option<String>,
+        #[arg(long)]
+        low_stock: bool,
+    },
     /// List lab members.
     Members,
     /// Update member role.
@@ -88,8 +123,30 @@ pub async fn run(
             let lab = client.update_lab(&data).await?;
             print_result(&lab, format);
         }
-        LabCommand::Orders => {
-            let orders = client.list_lab_orders().await?;
+        LabCommand::Orders {
+            skip,
+            limit,
+            order_type,
+            supplier_name,
+            status,
+            price_min,
+            price_max,
+            date_from,
+            date_to,
+        } => {
+            let orders = client
+                .list_lab_orders(
+                    *skip,
+                    *limit,
+                    order_type.as_deref(),
+                    supplier_name.as_deref(),
+                    status.as_deref(),
+                    price_min.as_deref(),
+                    price_max.as_deref(),
+                    date_from.as_deref(),
+                    date_to.as_deref(),
+                )
+                .await?;
             match format {
                 OutputFormat::Json => print_result(&orders, format),
                 OutputFormat::Text => {
@@ -104,12 +161,31 @@ pub async fn run(
                 }
             }
         }
-        LabCommand::OrdersStats => {
-            let stats = client.get_lab_order_stats().await?;
+        LabCommand::OrdersStats {
+            start_date,
+            end_date,
+        } => {
+            let stats = client
+                .get_lab_order_stats(start_date.as_deref(), end_date.as_deref())
+                .await?;
             print_result(&stats, format);
         }
-        LabCommand::Inventory => {
-            let stocks = client.list_lab_inventory().await?;
+        LabCommand::Inventory {
+            skip,
+            limit,
+            name,
+            location_id,
+            low_stock,
+        } => {
+            let stocks = client
+                .list_lab_inventory(
+                    *skip,
+                    *limit,
+                    name.as_deref(),
+                    location_id.as_deref(),
+                    *low_stock,
+                )
+                .await?;
             match format {
                 OutputFormat::Json => print_result(&stocks, format),
                 OutputFormat::Text => {

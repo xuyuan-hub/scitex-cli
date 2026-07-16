@@ -1,6 +1,5 @@
 ---
 name: scitex-shared
-version: 0.1.0
 description: "Use when first setting up scitex CLI, logging in, checking account status, handling token storage, checking updates, or preparing any Scientex API JSON payload that must match backend OpenAPI schemas."
 metadata:
   requires:
@@ -67,12 +66,14 @@ Do not invent CLI commands for backend endpoints that `scitex <domain> --help` d
 Do not treat all task endpoints as the same view:
 
 - **Lab tasks** (`scitex tasks create/list/get/results/...`) use `/lab/tasks`; they are the normal member view, scoped to the current lab or an explicit `--lab-id`.
-- **Platform tasks** (`scitex tasks workflow`, `scitex tasks update`, `scitex tasks update-file`) use `/tasks`; they are cross-lab administrator operations and require `platform_admin` or superuser permission.
+- **Platform tasks** (`scitex admin tasks ...`) use `/tasks`; they are cross-lab administrator operations and require `platform_admin` or superuser permission. Do not use the hidden compatibility aliases under `scitex tasks` for new workflows.
 - **My Tasks** (`scitex tasks my ...`) use `/staff/tasks`; they show only task stages assigned to the current staff member, not tasks created by them or all tasks in their lab.
 
 The same task can appear in all three views. Route by the user's role and intent, and never use an administrator endpoint as a fallback for a lab member.
 
 Task definition discovery follows the same boundary: `scitex tasks types --search <keyword>` and `scitex tasks type <TYPE_ID>` use the current lab's enabled, user-submit-able definitions. The list is a lightweight candidate view; fetch the selected definition's detail before constructing task input JSON. Do not use the administrator `/task-types` catalog for a normal lab user.
+
+For a standalone task file field, run `scitex files upload <FILE> -f json` and embed the returned reference in `input_data`. When creating a lab task directly, `scitex tasks create <JSON> --file-field key=path` remains the shorter multipart path.
 
 - Use the domain skill matching the task:
   - Orders: `../scitex-orders/SKILL.md`

@@ -259,6 +259,58 @@ fn lab_task_type_list_and_detail_responses_match_user_safe_contract() {
 }
 
 #[test]
+fn staff_task_list_filters_match_backend() {
+    let doc = load_openapi();
+    let parameters = query_parameter_names(&doc, "~1api~1v1~1staff~1tasks~1assignments", "get");
+    for expected in ["skip", "limit", "search", "exclude_status"] {
+        assert!(
+            parameters.contains(expected),
+            "staff assignment query parameter `{expected}` not found: {parameters:?}"
+        );
+    }
+}
+
+#[test]
+fn order_and_lab_query_parameters_match_backend() {
+    let doc = load_openapi();
+    for path in ["~1api~1v1~1orders~1stats", "~1api~1v1~1lab~1orders~1stats"] {
+        let parameters = query_parameter_names(&doc, path, "get");
+        for expected in ["start_date", "end_date"] {
+            assert!(
+                parameters.contains(expected),
+                "stats parameter `{expected}` not found for `{path}`: {parameters:?}"
+            );
+        }
+    }
+
+    let lab_orders = query_parameter_names(&doc, "~1api~1v1~1lab~1orders", "get");
+    for expected in [
+        "skip",
+        "limit",
+        "order_type",
+        "supplier_name",
+        "status",
+        "price_min",
+        "price_max",
+        "date_from",
+        "date_to",
+    ] {
+        assert!(
+            lab_orders.contains(expected),
+            "lab orders parameter `{expected}` not found: {lab_orders:?}"
+        );
+    }
+
+    let lab_inventory = query_parameter_names(&doc, "~1api~1v1~1lab~1inventory~1stocks", "get");
+    for expected in ["skip", "limit", "name", "location_id", "low_stock"] {
+        assert!(
+            lab_inventory.contains(expected),
+            "lab inventory parameter `{expected}` not found: {lab_inventory:?}"
+        );
+    }
+}
+
+#[test]
 fn order_list_filter_parameters_match_backend() {
     let doc = load_openapi();
     let parameters = query_parameter_names(&doc, "~1api~1v1~1orders~1", "get");
@@ -476,6 +528,39 @@ fn cli_implemented_endpoints_exist_with_methods() {
         ("GET", "/project/{id}/seed/stocks"),
         ("GET", "/project/{id}/seed/stocks/{id}"),
         ("GET", "/project/{id}/seed/field-catalog"),
+    ];
+    assert_operations_exist(&doc, &expected);
+}
+
+#[test]
+fn command_closure_endpoints_exist_with_methods() {
+    let doc = load_openapi();
+    let expected = [
+        ("POST", "/files/upload"),
+        ("GET", "/primers/"),
+        ("GET", "/users/staff"),
+        ("GET", "/admin/error-reports/"),
+        ("GET", "/admin/error-reports/{id}"),
+        ("GET", "/lab/tasks/{id}/parts/{id}"),
+        ("POST", "/staff/tasks/assignments/{id}/complete"),
+        ("POST", "/staff/tasks/{id}/upload-field"),
+        ("GET", "/task-types"),
+        ("GET", "/task-types/{id}"),
+        ("PATCH", "/task-types/{id}"),
+        ("GET", "/tasks"),
+        ("GET", "/tasks/{id}"),
+        ("POST", "/tasks/{id}/cancel"),
+        ("POST", "/tasks/{id}/parts"),
+        ("GET", "/tasks/{id}/parts/{id}"),
+        ("PATCH", "/tasks/{id}/parts/{id}"),
+        ("DELETE", "/tasks/{id}/parts/{id}"),
+        ("POST", "/tasks/{id}/assignments"),
+        ("DELETE", "/tasks/{id}/assignments/{id}"),
+        ("POST", "/tasks/{id}/documents"),
+        ("GET", "/tasks/{id}/documents"),
+        ("DELETE", "/tasks/{id}/documents/{id}"),
+        ("GET", "/tasks/documents/{id}/download"),
+        ("GET", "/tasks/{id}/results"),
     ];
     assert_operations_exist(&doc, &expected);
 }

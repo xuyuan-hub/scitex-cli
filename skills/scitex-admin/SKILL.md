@@ -1,15 +1,15 @@
 ---
 name: scitex-admin
-description: "Use when creating, deleting, or managing Scientex admin-only task type catalog definitions. Normal task execution remains under scitex-task; this skill is for catalog administration such as creating reusable task types."
+description: "Use when searching, creating, updating, deleting, or managing Scientex admin-only task type catalog definitions, or when a platform administrator must inspect and manage tasks across labs. Normal lab task execution remains under scitex-task."
 metadata:
   requires:
     bins: ["scitex"]
   cliHelp: "scitex admin --help"
 ---
 
-# Scientex Admin Task Type Catalog
+# Scientex Platform Administration
 
-Use this skill when the user wants to define or manage reusable Scientex task types, such as adding a new staff review task type or compute task type to the platform catalog. Also use it when binding or unbinding staff users who are allowed to handle a task type.
+Use this skill when the user wants to define or manage reusable Scientex task types, bind eligible staff, inspect submitted client errors, or manage task instances across labs from the platform administrator view.
 
 Examples:
 
@@ -36,7 +36,10 @@ Use the top-level admin command group:
 
 ```bash
 # Task type lifecycle
+scitex admin task-types list [--search <keyword>] [--filters <JSON>]
+scitex admin task-types get <TASK_TYPE_ID>
 scitex admin task-types create <task_type.json> [--sop <file>] [--work-order <file>]
+scitex admin task-types update <TASK_TYPE_ID> <patch.json>
 scitex admin task-types delete <TASK_TYPE_ID>
 
 # Document management (SOP, work order, attachment)
@@ -49,6 +52,19 @@ scitex admin task-types feedback <TYPE_ID>
 scitex admin task-types staff list <TASK_TYPE_ID>
 scitex admin task-types staff add <TASK_TYPE_ID> <USER_ID>
 scitex admin task-types staff remove <TASK_TYPE_ID> <USER_ID>
+
+# Eligible staff lookup
+scitex admin users staff --skip 0 --limit 100
+
+# Cross-lab task view
+scitex admin tasks list
+scitex admin tasks get <TASK_ID>
+scitex admin tasks workflow <TASK_ID>
+scitex admin tasks results <TASK_ID>
+
+# Submitted CLI error reports
+scitex admin error-reports list [--category <CATEGORY>]
+scitex admin error-reports get <REPORT_ID>
 ```
 
 Do not wrap these normal task execution endpoints as admin catalog commands:
@@ -146,13 +162,13 @@ If `required` is present, every required field should exist in `properties`.
 
 ## Workflow
 
-1. A normal `scitex tasks types` query is lab-scoped and cannot prove platform-catalog uniqueness. Choose a stable key, let the backend enforce global uniqueness, and report a duplicate-key conflict rather than treating a lab search as authoritative.
-2. Translate the user's task-type idea into a clear `TaskTypeCreate` JSON payload.
-2. Prefer stable lowercase snake_case keys for `key` and schema property names.
-3. Include only fields supported by the OpenAPI schema.
-4. Save the payload as a temporary JSON file.
-5. If the user provides SOP or work order content, write those to separate files now.
-6. Show the payload, key, category, and documents to be created; obtain confirmation before the write operation. Then run create with inline document flags when files are ready:
+1. Search the platform catalog with `scitex admin task-types list --search <keyword> -f json`; use `--filters` when a known field materially narrows candidates. Do not use the Lab-scoped `tasks types` view to prove global uniqueness.
+2. Fetch a likely duplicate with `scitex admin task-types get <ID> -f json` before deciding whether to update or create.
+3. Translate a new task-type idea into a clear `TaskTypeCreate` JSON payload.
+4. Prefer stable lowercase snake_case keys for `key` and schema property names.
+5. Include only fields supported by the OpenAPI schema.
+6. Save the payload as a temporary JSON file. If the user provides SOP or work order content, write those to separate files now.
+7. Show the payload, key, category, and documents to be created; obtain confirmation before the write operation. Then run create with inline document flags when files are ready:
 
 ```bash
 # Create with SOP and work order in one step
@@ -164,7 +180,7 @@ scitex admin task-types upload-doc <TYPE_ID> <sop_file> --doc-type sop -f json
 scitex admin task-types upload-doc <TYPE_ID> <wo_file> --doc-type work_order -f json
 ```
 
-7. Report the created task type id, key, display name, category, and any uploaded document ids.
+8. Report the created task type id, key, display name, category, and any uploaded document ids.
 
 **When to upload documents:** Always upload an SOP when the task type represents a procedure with steps, safety rules, or inspection checklists. Always upload a work order template when the task type requires staff to fill out a structured daily/per-run record. Do not leave `documents: []` if the user provided procedure content.
 
@@ -257,6 +273,16 @@ Rules:
 
 - Use this workflow when the user asks to bind, assign, allow, authorize, remove, or unbind a staff user for a task type.
 - `remove` takes `USER_ID`, not `assignment_id`, because the backend DELETE path is `/task-types/{type_id}/staff/{user_id}`.
-- If the user gives a name or email rather than `USER_ID`, first use available user/lab-member lookup commands to resolve the user ID. If no reliable lookup is available, ask the user for the user ID.
+- If the user gives a name or email rather than `USER_ID`, list eligible staff with `scitex admin users staff -f json` and resolve an unambiguous user ID. Ask the user only when multiple candidates remain.
 - Do not use `scitex tasks create` or workflow `assignee_ids` for task type catalog binding. Those are for task instances.
 - After binding or unbinding, summarize the task type id and user id. Use `staff list` when the user wants to verify current bindings.
+
+## Platform Task View
+
+Use `scitex admin tasks ...` only for global, cross-lab administration. It includes task get/update/cancel, workflow detail, parts, assignments, documents, and results. Run `scitex admin tasks --help` for the nested mutation commands and confirm before cancellation, deletion, assignment changes, or document changes.
+
+Never substitute this view for a Lab user's `scitex tasks ...` request. The old top-level `tasks workflow/update/update-file` aliases are hidden for compatibility and should not appear in new instructions.
+
+## Error Reports
+
+Use `scitex admin error-reports list` to browse submitted client reports, narrow by category when known, and fetch only the selected report with `get`. These commands inspect reports; users submit a new report with the non-admin `scitex error-report` command.

@@ -1,8 +1,10 @@
 pub mod admin;
 pub mod error_report;
+pub mod files;
 pub mod inventory;
 pub mod lab;
 pub mod orders;
+pub mod primers;
 pub mod project;
 pub mod projects;
 pub mod skills;

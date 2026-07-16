@@ -79,11 +79,21 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
+    /// Show one workflow part visible to the current lab.
+    Part {
+        task_id: String,
+        part_id: String,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
     /// Show global workflow detail for a task (platform_admin or superuser only).
+    #[command(hide = true)]
     Workflow { id: String },
     /// Update a task globally (platform_admin or superuser only).
+    #[command(hide = true)]
     Update { id: String, data: String },
     /// Update a task globally from a JSON file (platform_admin or superuser only).
+    #[command(hide = true)]
     UpdateFile { id: String, file: String },
     /// List lab-visible task documents.
     Documents {
@@ -148,6 +158,12 @@ pub enum MyTasksCommand {
         skip: u32,
         #[arg(short, long, default_value_t = 100)]
         limit: u32,
+        /// Search task title, description, or part name.
+        #[arg(long)]
+        search: Option<String>,
+        /// Exclude assignments in this status.
+        #[arg(long, value_enum)]
+        exclude_status: Option<AssignmentStatusArg>,
     },
     /// Show one task stage assigned to me.
     Get { assignment_id: String },
@@ -163,6 +179,22 @@ pub enum MyTasksCommand {
         /// Optional JSON file with document_feedback (SOP/work_order feedback).
         #[arg(long, value_name = "FILE")]
         feedback: Option<String>,
+    },
+    /// Atomically submit a result, complete the assignment, and unlock downstream stages.
+    Complete {
+        assignment_id: String,
+        file: String,
+        /// Optional JSON file with document_feedback (SOP/work_order feedback).
+        #[arg(long, value_name = "FILE")]
+        feedback: Option<String>,
+    },
+    /// Upload a file field for a staff-visible task.
+    UploadField {
+        task_id: String,
+        file: String,
+        field_key: String,
+        #[arg(long, value_enum, default_value_t = TaskDocumentVisibilityArg::LabAndStaff)]
+        visibility: TaskDocumentVisibilityArg,
     },
     /// List staff-visible documents for a task.
     Documents { task_id: String },
@@ -184,6 +216,23 @@ pub enum AssignmentStatusArg {
 pub enum TaskTypeCategoryArg {
     Staff,
     Compute,
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum TaskDocumentVisibilityArg {
+    LabAndStaff,
+    StaffOnly,
+    LabOnly,
+}
+
+impl TaskDocumentVisibilityArg {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TaskDocumentVisibilityArg::LabAndStaff => "lab_and_staff",
+            TaskDocumentVisibilityArg::StaffOnly => "staff_only",
+            TaskDocumentVisibilityArg::LabOnly => "lab_only",
+        }
+    }
 }
 
 impl TaskTypeCategoryArg {
@@ -288,6 +337,16 @@ pub async fn run(
             let task = client.get_lab_task(id, lab_id.as_deref()).await?;
             print_result(&task, format);
         }
+        TasksCommand::Part {
+            task_id,
+            part_id,
+            lab_id,
+        } => {
+            let part = client
+                .get_lab_task_part(task_id, part_id, lab_id.as_deref())
+                .await?;
+            print_result(&part, format);
+        }
         TasksCommand::Workflow { id } => {
             let workflow = client.get_task_workflow(id).await?;
             match client.list_lab_task_results(id, None).await {
@@ -388,8 +447,20 @@ async fn run_my_tasks(
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
     match command {
-        MyTasksCommand::List { skip, limit } => {
-            let assignments = client.list_my_task_assignments(*skip, *limit).await?;
+        MyTasksCommand::List {
+            skip,
+            limit,
+            search,
+            exclude_status,
+        } => {
+            let assignments = client
+                .list_my_task_assignments(
+                    *skip,
+                    *limit,
+                    search.as_deref(),
+                    exclude_status.as_ref().map(AssignmentStatusArg::as_str),
+                )
+                .await?;
             match format {
                 OutputFormat::Json => print_result(&assignments, format),
                 OutputFormat::Text => print_assignments(&assignments),
@@ -413,16 +484,30 @@ async fn run_my_tasks(
             file,
             feedback,
         } => {
-            let mut data = read_json_file(file)?;
-            if let Some(feedback_path) = feedback {
-                let feedback_data = read_json_file(feedback_path)?;
-                if let Some(obj) = data.as_object_mut() {
-                    obj.insert("document_feedback".to_string(), feedback_data);
-                } else {
-                    anyhow::bail!("Result JSON file must contain a JSON object");
-                }
-            }
+            let data = read_result_payload(file, feedback.as_deref())?;
             let result = client.submit_my_task_result(assignment_id, &data).await?;
+            print_result(&result, format);
+        }
+        MyTasksCommand::Complete {
+            assignment_id,
+            file,
+            feedback,
+        } => {
+            let data = read_result_payload(file, feedback.as_deref())?;
+            let result = client
+                .complete_my_task_assignment(assignment_id, &data)
+                .await?;
+            print_result(&result, format);
+        }
+        MyTasksCommand::UploadField {
+            task_id,
+            file,
+            field_key,
+            visibility,
+        } => {
+            let result = client
+                .upload_my_task_field(task_id, file, field_key, visibility.as_str())
+                .await?;
             print_result(&result, format);
         }
         MyTasksCommand::Documents { task_id } => {
@@ -447,6 +532,22 @@ async fn run_my_tasks(
 fn read_json_file(path: &str) -> anyhow::Result<serde_json::Value> {
     let content = std::fs::read_to_string(path)?;
     Ok(serde_json::from_str(&content)?)
+}
+
+fn read_result_payload(
+    path: &str,
+    feedback_path: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
+    let mut data = read_json_file(path)?;
+    if let Some(feedback_path) = feedback_path {
+        let feedback_data = read_json_file(feedback_path)?;
+        if let Some(obj) = data.as_object_mut() {
+            obj.insert("document_feedback".to_string(), feedback_data);
+        } else {
+            anyhow::bail!("Result JSON file must contain a JSON object");
+        }
+    }
+    Ok(data)
 }
 
 fn print_task_documents_text(docs: &[TaskDocument]) {
@@ -1758,6 +1859,89 @@ mod tests {
                 assert!(feedback.is_none());
             }
             _ => panic!("expected submit result command"),
+        }
+    }
+
+    #[test]
+    fn parses_lab_task_part() {
+        let args = parse_tasks(&["tasks", "part", "task-1", "part-1", "--lab-id", "lab-1"]);
+        match args.command {
+            TasksCommand::Part {
+                task_id,
+                part_id,
+                lab_id,
+            } => {
+                assert_eq!(task_id, "task-1");
+                assert_eq!(part_id, "part-1");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected lab task part command"),
+        }
+    }
+
+    #[test]
+    fn parses_my_list_filters() {
+        let args = parse_tasks(&[
+            "tasks",
+            "my",
+            "list",
+            "--search",
+            "sample qc",
+            "--exclude-status",
+            "completed",
+        ]);
+        match args.command {
+            TasksCommand::My {
+                command:
+                    MyTasksCommand::List {
+                        search,
+                        exclude_status,
+                        ..
+                    },
+            } => {
+                assert_eq!(search.as_deref(), Some("sample qc"));
+                assert!(matches!(
+                    exclude_status,
+                    Some(AssignmentStatusArg::Completed)
+                ));
+            }
+            _ => panic!("expected filtered my tasks list"),
+        }
+    }
+
+    #[test]
+    fn parses_my_complete_and_upload_field() {
+        let complete = parse_tasks(&[
+            "tasks",
+            "my",
+            "complete",
+            "assignment-1",
+            "result.json",
+            "--feedback",
+            "feedback.json",
+        ]);
+        assert!(matches!(
+            complete.command,
+            TasksCommand::My {
+                command: MyTasksCommand::Complete { .. }
+            }
+        ));
+
+        let upload = parse_tasks(&[
+            "tasks",
+            "my",
+            "upload-field",
+            "task-1",
+            "result.bin",
+            "result_file",
+            "--visibility",
+            "staff-only",
+        ]);
+        match upload.command {
+            TasksCommand::My {
+                command: MyTasksCommand::UploadField { visibility, .. },
+            } => assert!(matches!(visibility, TaskDocumentVisibilityArg::StaffOnly)),
+            _ => panic!("expected my upload-field command"),
         }
     }
 

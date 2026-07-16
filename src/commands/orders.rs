@@ -18,7 +18,12 @@ pub struct OrdersArgs {
 #[derive(Subcommand)]
 pub enum OrdersCommand {
     /// Show order statistics.
-    Stats,
+    Stats {
+        #[arg(long)]
+        start_date: Option<String>,
+        #[arg(long)]
+        end_date: Option<String>,
+    },
     /// List orders.
     List {
         #[arg(short, long, default_value_t = 0)]
@@ -90,8 +95,13 @@ pub async fn run(
     let client = ScientexClient::new(Arc::clone(config))?;
 
     match &args.command {
-        OrdersCommand::Stats => {
-            let stats = client.get_order_stats().await?;
+        OrdersCommand::Stats {
+            start_date,
+            end_date,
+        } => {
+            let stats = client
+                .get_order_stats(start_date.as_deref(), end_date.as_deref())
+                .await?;
             print_result(&stats, format);
         }
         OrdersCommand::List {

@@ -1,6 +1,5 @@
 ---
 name: scitex-templates
-version: 0.1.0
 description: "Use when listing, creating, updating, deleting, selecting, or retrieving Scientex order-info templates for primer synthesis or sequencing orders, then applying their defaults while composing an order."
 metadata:
   requires:

@@ -45,7 +45,8 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
-    pub full_name: String,
+    #[serde(default)]
+    pub full_name: Option<String>,
     pub email: String,
     #[serde(default)]
     pub phone_number: Option<String>,
@@ -117,6 +118,37 @@ pub struct PrimerItem {
     pub scale_od: Option<String>,
     #[serde(default)]
     pub purification_method: Option<String>,
+}
+
+/// Primer row returned by the primer list endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrimerRecord {
+    pub id: String,
+    pub order_id: String,
+    pub primer_name: String,
+    pub sequence: String,
+    #[serde(default)]
+    pub base_count: Option<u32>,
+    #[serde(default)]
+    pub purification_method: Option<String>,
+    #[serde(default)]
+    pub nmoles: Option<String>,
+    #[serde(default)]
+    pub scale_od: Option<String>,
+    #[serde(default)]
+    pub tube_count: Option<u32>,
+    #[serde(default)]
+    pub deliverable_form: Option<String>,
+    #[serde(default)]
+    pub five_modification: Option<String>,
+    #[serde(default)]
+    pub three_modification: Option<String>,
+    #[serde(default)]
+    pub double_modification: Option<String>,
+    #[serde(default)]
+    pub primer_type: Option<String>,
+    #[serde(default)]
+    pub remarks: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -484,6 +516,16 @@ pub struct TaskPart {
     pub output_data: Option<serde_json::Value>,
 }
 
+/// Lab-visible detail for one workflow part, including its documents and results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPartDetail {
+    pub part: TaskPart,
+    #[serde(default)]
+    pub documents: Vec<TaskDocument>,
+    #[serde(default)]
+    pub results: Vec<TaskResult>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskType {
     pub id: String,
@@ -647,6 +689,23 @@ pub struct TaskDocument {
     pub feishu_sync_status: Option<String>,
     #[serde(default)]
     pub scientex_link_url: Option<String>,
+}
+
+/// Reference returned after uploading a file for later use in task input data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadFieldResponse {
+    #[serde(default = "default_storage_backend")]
+    pub storage_backend: String,
+    pub storage_key: String,
+    pub filename: String,
+    pub content_type: String,
+    pub size: u64,
+    #[serde(default)]
+    pub document_id: Option<String>,
+}
+
+fn default_storage_backend() -> String {
+    "local".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1157,6 +1216,30 @@ mod tests {
         .expect("staff binding without assignment_id should parse");
         assert_eq!(value.assignment_id, None);
         assert_eq!(value.user_id, "user-1");
+    }
+
+    #[test]
+    fn user_allows_nullable_full_name() {
+        let value: User = serde_json::from_value(serde_json::json!({
+            "id": "user-1",
+            "full_name": null,
+            "email": "user@example.com"
+        }))
+        .expect("user with nullable full_name should parse");
+        assert_eq!(value.full_name, None);
+    }
+
+    #[test]
+    fn upload_field_response_defaults_storage_backend() {
+        let value: UploadFieldResponse = serde_json::from_value(serde_json::json!({
+            "storage_key": "uploads/files/input.bin",
+            "filename": "input.bin",
+            "content_type": "application/octet-stream",
+            "size": 42
+        }))
+        .expect("upload reference should parse");
+        assert_eq!(value.storage_backend, "local");
+        assert_eq!(value.document_id, None);
     }
 
     // ---- Feishu document fields ----

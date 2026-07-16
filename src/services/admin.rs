@@ -1,10 +1,39 @@
-use crate::api_response::{extract_array, extract_object};
+use crate::api_response::{extract_array, extract_object, extract_paginated, PaginatedList};
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
 use crate::services::path_segment_encode;
 use crate::types::{StaffUserInfo, TaskType, TaskTypeDocument};
 
 impl ScientexClient {
+    pub async fn list_admin_task_types(
+        &self,
+        skip: u32,
+        limit: u32,
+        search: Option<&str>,
+        filters: Option<&str>,
+    ) -> Result<PaginatedList<TaskType>, ScientexError> {
+        let path = admin_task_types_query_path(skip, limit, search, filters);
+        let resp: serde_json::Value = self.http.get(&path).await?;
+        extract_paginated(resp)
+    }
+
+    pub async fn get_admin_task_type(&self, task_type_id: &str) -> Result<TaskType, ScientexError> {
+        let resp: serde_json::Value = self.http.get(&admin_task_type_path(task_type_id)).await?;
+        extract_object(resp)
+    }
+
+    pub async fn update_admin_task_type(
+        &self,
+        task_type_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<TaskType, ScientexError> {
+        let resp: serde_json::Value = self
+            .http
+            .patch(&admin_task_type_path(task_type_id), data)
+            .await?;
+        extract_object(resp)
+    }
+
     pub async fn create_admin_task_type(
         &self,
         data: &serde_json::Value,
@@ -145,6 +174,24 @@ fn admin_task_types_path() -> &'static str {
     "/task-types"
 }
 
+fn admin_task_types_query_path(
+    skip: u32,
+    limit: u32,
+    search: Option<&str>,
+    filters: Option<&str>,
+) -> String {
+    let mut path = format!("{}?skip={skip}&limit={limit}", admin_task_types_path());
+    if let Some(search) = search.filter(|value| !value.is_empty()) {
+        path.push_str("&search=");
+        path.push_str(&crate::services::url_encode(search));
+    }
+    if let Some(filters) = filters.filter(|value| !value.is_empty()) {
+        path.push_str("&filters=");
+        path.push_str(&crate::services::url_encode(filters));
+    }
+    path
+}
+
 fn admin_task_type_path(task_type_id: &str) -> String {
     format!("/task-types/{}", path_segment_encode(task_type_id))
 }
@@ -184,6 +231,10 @@ mod tests {
     #[test]
     fn builds_admin_task_type_paths() {
         assert_eq!(admin_task_types_path(), "/task-types");
+        assert_eq!(
+            admin_task_types_query_path(0, 20, Some("sample qc"), None),
+            "/task-types?skip=0&limit=20&search=sample+qc"
+        );
         assert_eq!(
             admin_task_type_path("type with space"),
             "/task-types/type%20with%20space"

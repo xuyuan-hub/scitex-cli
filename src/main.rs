@@ -3,8 +3,8 @@ use std::sync::Arc;
 use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use scitex_cli::commands::{
-    admin, error_report, inventory, lab, orders, project, projects, skills, tasks, templates,
-    update, users,
+    admin, error_report, files, inventory, lab, orders, primers, project, projects, skills, tasks,
+    templates, update, users,
 };
 use scitex_cli::config::Config;
 use scitex_cli::error_history::ErrorHistory;
@@ -55,8 +55,14 @@ enum Commands {
     /// Current user management.
     Me(users::MeArgs),
 
+    /// Upload reusable task input files.
+    Files(files::FilesArgs),
+
     /// Order management.
     Orders(orders::OrdersArgs),
+
+    /// Primer records from synthesis orders.
+    Primers(primers::PrimersArgs),
 
     /// Template management.
     Templates(templates::TemplatesArgs),
@@ -76,7 +82,7 @@ enum Commands {
     /// Task management.
     Tasks(tasks::TasksArgs),
 
-    /// Admin-only catalog management.
+    /// Platform administration for tasks, task types, users, and reports.
     Admin(admin::AdminArgs),
 
     /// AI agent skill installation and checks.
@@ -135,7 +141,9 @@ async fn main() {
             Ok(())
         }
         Some(Commands::Me(args)) => users::run(&args, &config, &format).await,
+        Some(Commands::Files(args)) => files::run(&args, &config, &format).await,
         Some(Commands::Orders(args)) => orders::run(&args, &config, &format).await,
+        Some(Commands::Primers(args)) => primers::run(&args, &config, &format).await,
         Some(Commands::Templates(args)) => templates::run(&args, &config, &format).await,
         Some(Commands::Inventory(args)) => inventory::run(&args, &config, &format).await,
         Some(Commands::Lab(args)) => lab::run(&args, &config, &format).await,

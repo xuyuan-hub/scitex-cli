@@ -1,9 +1,11 @@
 mod admin;
 mod error_reports;
 mod feishu;
+mod files;
 mod inventory;
 mod lab;
 mod orders;
+mod primers;
 mod project;
 mod project_seed;
 mod projects;

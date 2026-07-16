@@ -84,6 +84,21 @@ impl ScientexHttp {
         parse_response(resp, path).await
     }
 
+    pub(crate) async fn post_form<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        fields: &[(&str, String)],
+    ) -> Result<T, ScientexError> {
+        let resp = self
+            .client
+            .post(self.url(path))
+            .form(fields)
+            .send()
+            .await
+            .map_err(ScientexError::RequestError)?;
+        parse_response(resp, path).await
+    }
+
     pub(crate) async fn post_empty<B: serde::Serialize>(
         &self,
         path: &str,

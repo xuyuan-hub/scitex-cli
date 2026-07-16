@@ -32,7 +32,11 @@ pub async fn check_status(config: &Config) -> bool {
     {
         Ok(resp) if resp.status().is_success() => {
             if let Ok(user) = resp.json::<crate::types::User>().await {
-                println!("已登录: {} ({})", user.full_name, user.email);
+                println!(
+                    "已登录: {} ({})",
+                    user.full_name.as_deref().unwrap_or("-"),
+                    user.email
+                );
                 true
             } else {
                 println!("Token 有效，但解析用户信息失败");

@@ -1,6 +1,5 @@
 ---
 name: scitex-users
-version: 0.1.0
 description: "Use when checking Scientex login status, reading or updating the authenticated user's profile, changing password, managing Feishu document settings, logging out, or preparing user contact fields for orders."
 metadata:
   requires:

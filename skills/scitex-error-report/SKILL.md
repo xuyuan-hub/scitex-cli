@@ -1,6 +1,5 @@
 ---
 name: scitex-error-report
-version: 0.1.0
 description: "Use when the user encounters a Scientex CLI error and wants to submit an error report, or when the CLI detects repeated errors and suggests reporting. Categorizes errors into ui-display, functional, data, performance, permission, or other."
 metadata:
   requires:

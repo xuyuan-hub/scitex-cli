@@ -1,7 +1,7 @@
 use crate::api_response::{envelope_data, extract_object, extract_paginated, PaginatedList};
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
-use crate::services::{empty_body, path_segment_encode, single_field_body};
+use crate::services::{empty_body, path_segment_encode, single_field_body, url_encode};
 use crate::types::{Application, ApprovalRule, Invitation, Lab, LabMember, Order, Stock};
 
 impl ScientexClient {
@@ -23,18 +23,63 @@ impl ScientexClient {
         extract_object(resp)
     }
 
-    pub async fn list_lab_orders(&self) -> Result<PaginatedList<Order>, ScientexError> {
-        let resp: serde_json::Value = self.http.get(lab_orders_path()).await?;
+    pub async fn list_lab_orders(
+        &self,
+        skip: u32,
+        limit: u32,
+        order_type: Option<&str>,
+        supplier_name: Option<&str>,
+        status: Option<&str>,
+        price_min: Option<&str>,
+        price_max: Option<&str>,
+        date_from: Option<&str>,
+        date_to: Option<&str>,
+    ) -> Result<PaginatedList<Order>, ScientexError> {
+        let path = lab_orders_path(
+            skip,
+            limit,
+            order_type,
+            supplier_name,
+            status,
+            price_min,
+            price_max,
+            date_from,
+            date_to,
+        );
+        let resp: serde_json::Value = self.http.get(&path).await?;
         extract_paginated(resp)
     }
 
-    pub async fn get_lab_order_stats(&self) -> Result<serde_json::Value, ScientexError> {
-        let resp: serde_json::Value = self.http.get(lab_order_stats_path()).await?;
+    pub async fn get_lab_order_stats(
+        &self,
+        start_date: Option<&str>,
+        end_date: Option<&str>,
+    ) -> Result<serde_json::Value, ScientexError> {
+        let resp: serde_json::Value = self
+            .http
+            .get(&lab_order_stats_path(start_date, end_date))
+            .await?;
         Ok(envelope_data(resp))
     }
 
-    pub async fn list_lab_inventory(&self) -> Result<PaginatedList<Stock>, ScientexError> {
-        let resp: serde_json::Value = self.http.get(lab_inventory_path()).await?;
+    pub async fn list_lab_inventory(
+        &self,
+        skip: u32,
+        limit: u32,
+        name: Option<&str>,
+        location_id: Option<&str>,
+        low_stock: bool,
+    ) -> Result<PaginatedList<Stock>, ScientexError> {
+        let resp: serde_json::Value = self
+            .http
+            .get(&lab_inventory_path(
+                skip,
+                limit,
+                name,
+                location_id,
+                low_stock,
+            ))
+            .await?;
         extract_paginated(resp)
     }
 
@@ -174,16 +219,72 @@ fn member_path(user_id: &str) -> String {
     format!("/lab/members/{}", path_segment_encode(user_id))
 }
 
-fn lab_orders_path() -> &'static str {
-    "/lab/orders"
+fn lab_orders_path(
+    skip: u32,
+    limit: u32,
+    order_type: Option<&str>,
+    supplier_name: Option<&str>,
+    status: Option<&str>,
+    price_min: Option<&str>,
+    price_max: Option<&str>,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> String {
+    let mut path = format!("/lab/orders?skip={skip}&limit={limit}");
+    for (name, value) in [
+        ("order_type", order_type),
+        ("supplier_name", supplier_name),
+        ("status", status),
+        ("price_min", price_min),
+        ("price_max", price_max),
+        ("date_from", date_from),
+        ("date_to", date_to),
+    ] {
+        if let Some(value) = value.filter(|value| !value.is_empty()) {
+            path.push('&');
+            path.push_str(name);
+            path.push('=');
+            path.push_str(&url_encode(value));
+        }
+    }
+    path
 }
 
-fn lab_order_stats_path() -> &'static str {
-    "/lab/orders/stats"
+fn lab_order_stats_path(start_date: Option<&str>, end_date: Option<&str>) -> String {
+    let mut path = "/lab/orders/stats".to_string();
+    let mut separator = '?';
+    for (name, value) in [("start_date", start_date), ("end_date", end_date)] {
+        if let Some(value) = value.filter(|value| !value.is_empty()) {
+            path.push(separator);
+            separator = '&';
+            path.push_str(name);
+            path.push('=');
+            path.push_str(&url_encode(value));
+        }
+    }
+    path
 }
 
-fn lab_inventory_path() -> &'static str {
-    "/lab/inventory/stocks"
+fn lab_inventory_path(
+    skip: u32,
+    limit: u32,
+    name: Option<&str>,
+    location_id: Option<&str>,
+    low_stock: bool,
+) -> String {
+    let mut path = format!("/lab/inventory/stocks?skip={skip}&limit={limit}");
+    if let Some(name) = name.filter(|value| !value.is_empty()) {
+        path.push_str("&name=");
+        path.push_str(&url_encode(name));
+    }
+    if let Some(location_id) = location_id.filter(|value| !value.is_empty()) {
+        path.push_str("&location_id=");
+        path.push_str(&url_encode(location_id));
+    }
+    if low_stock {
+        path.push_str("&low_stock=true");
+    }
+    path
 }
 
 fn invitation_action_path(invitation_id: &str, action: &str) -> String {
@@ -229,9 +330,37 @@ mod tests {
     #[test]
     fn builds_lab_member_and_join_paths() {
         assert_eq!(member_path("user-1"), "/lab/members/user-1");
-        assert_eq!(lab_orders_path(), "/lab/orders");
-        assert_eq!(lab_order_stats_path(), "/lab/orders/stats");
-        assert_eq!(lab_inventory_path(), "/lab/inventory/stocks");
+        assert_eq!(
+            lab_orders_path(0, 100, None, None, None, None, None, None, None),
+            "/lab/orders?skip=0&limit=100"
+        );
+        assert_eq!(
+            lab_orders_path(
+                10,
+                20,
+                Some("primer synthesis"),
+                Some("Sangon & Co"),
+                Some("pending"),
+                Some("10"),
+                Some("200"),
+                Some("2026-07-01"),
+                Some("2026-07-31")
+            ),
+            "/lab/orders?skip=10&limit=20&order_type=primer+synthesis&supplier_name=Sangon+%26+Co&status=pending&price_min=10&price_max=200&date_from=2026-07-01&date_to=2026-07-31"
+        );
+        assert_eq!(lab_order_stats_path(None, None), "/lab/orders/stats");
+        assert_eq!(
+            lab_order_stats_path(Some("2026-07-01"), Some("2026-07-31")),
+            "/lab/orders/stats?start_date=2026-07-01&end_date=2026-07-31"
+        );
+        assert_eq!(
+            lab_inventory_path(0, 100, None, None, false),
+            "/lab/inventory/stocks?skip=0&limit=100"
+        );
+        assert_eq!(
+            lab_inventory_path(10, 20, Some("dNTP Mix"), Some("loc/1"), true),
+            "/lab/inventory/stocks?skip=10&limit=20&name=dNTP+Mix&location_id=loc%2F1&low_stock=true"
+        );
         assert_eq!(join_lab_path("lab-1"), "/lab/join/lab-1");
         assert_eq!(approval_rule_path("rule-1"), "/lab/approval-rules/rule-1");
     }

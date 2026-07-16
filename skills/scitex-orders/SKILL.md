@@ -1,6 +1,5 @@
 ---
 name: scitex-orders
-version: 0.1.0
 description: "Use when creating, listing, inspecting, updating, downloading, uploading, approving, or placing Scientex primer synthesis or sequencing orders, including primer purchase workflows."
 metadata:
   requires:

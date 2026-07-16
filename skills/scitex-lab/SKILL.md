@@ -1,6 +1,5 @@
 ---
 name: scitex-lab
-version: 0.1.0
 description: "Use when managing Scientex lab information, members, roles, invitations, join applications, approval settings, or lab approval rules."
 metadata:
   requires:

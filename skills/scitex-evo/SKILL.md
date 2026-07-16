@@ -106,7 +106,7 @@ scitex tasks get <task_id> -f json
 scitex tasks results <task_id> -f json
 ```
 
-The exact workflow graph and assignment state are only available through `scitex tasks workflow`, a platform-admin global view. For lab users, report only lab-visible task status and results; do not infer hidden stage state from a permission failure.
+The exact workflow graph and assignment state are only available through `scitex admin tasks workflow`, a platform-admin global view. For lab users, report only lab-visible task status and results; do not infer hidden stage state from a permission failure.
 
 ## File Inputs
 
