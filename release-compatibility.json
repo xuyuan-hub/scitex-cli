@@ -8,5 +8,5 @@
     "fixture": "tests/fixtures/openapi.json",
     "fixture_sha256": "b0e2a633b8bab8a09f1f7d0ee71a071aba6f05c0477f9891ba9341363d9e85d7"
   },
-  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-16 pinned OpenAPI fixture; this baseline adds lab-scoped task-type search summaries and task-type detail retrieval."
+  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-16 pinned OpenAPI fixture; this Release separates Lab, Staff, and platform-admin task views, adds lightweight Lab task-type discovery, atomic staff completion, global task administration, reusable file uploads, primers, and server-side order/Lab filters."
 }
