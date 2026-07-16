@@ -93,6 +93,26 @@ fn assert_operations_exist(doc: &serde_json::Value, expected: &[(&str, &str)]) {
     }
 }
 
+fn query_parameter_names(doc: &serde_json::Value, path: &str, method: &str) -> HashSet<String> {
+    doc.pointer(&format!("/paths/{path}/{method}/parameters"))
+        .and_then(|value| value.as_array())
+        .map(|parameters| {
+            parameters
+                .iter()
+                .filter(|parameter| {
+                    parameter.get("in").and_then(|value| value.as_str()) == Some("query")
+                })
+                .filter_map(|parameter| {
+                    parameter
+                        .get("name")
+                        .and_then(|value| value.as_str())
+                        .map(ToOwned::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 // ---------------------------------------------------------------------------
 // Enum value tests
 // ---------------------------------------------------------------------------
@@ -120,6 +140,40 @@ fn cli_task_type_category_values_match_backend() {
         assert!(
             backend.contains(value),
             "CLI task type category `{value}` not in backend TaskTypeCategory {backend:?}"
+        );
+    }
+}
+
+#[test]
+fn task_type_catalog_search_parameters_match_backend() {
+    let doc = load_openapi();
+    let parameters = query_parameter_names(&doc, "~1api~1v1~1task-types", "get");
+    for expected in ["skip", "limit", "search", "filters"] {
+        assert!(
+            parameters.contains(expected),
+            "task type catalog query parameter `{expected}` not found in OpenAPI: {parameters:?}"
+        );
+    }
+}
+
+#[test]
+fn order_list_filter_parameters_match_backend() {
+    let doc = load_openapi();
+    let parameters = query_parameter_names(&doc, "~1api~1v1~1orders~1", "get");
+    for expected in [
+        "skip",
+        "limit",
+        "order_type",
+        "supplier_name",
+        "status",
+        "price_min",
+        "price_max",
+        "date_from",
+        "date_to",
+    ] {
+        assert!(
+            parameters.contains(expected),
+            "order list query parameter `{expected}` not found in OpenAPI: {parameters:?}"
         );
     }
 }

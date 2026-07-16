@@ -61,7 +61,7 @@ Rules:
 
 ## Inventory Check (LLM-Driven Active Search)
 
-Do NOT use `scitex inventory check` as the primary discovery method. Its literal name matching cannot handle Chinese/English variations, abbreviations, or synonyms.
+Do NOT use `scitex inventory check` as the primary discovery method. Its literal name matching cannot handle Chinese/English variations, abbreviations, or synonyms. Once a precise `item_id` has been selected, it may be used as a non-reserving aggregate stock check.
 
 Instead, the LLM must actively search for all requirements in bulk using the `--filters` parameter with `like` operator and `or` combine logic. This replaces many individual `--search` calls with 1-2 queries.
 
@@ -98,7 +98,7 @@ scitex inventory items --filters '[
 ]' -f json
 ```
 
-Cover each requirement with multiple search terms (Chinese, English, abbreviation). The LLM is responsible for picking a diverse set of terms that span all requirements in one query.
+Start with exact catalog number/name plus category or supplier when known. Cover each remaining ambiguous requirement with multiple search terms (Chinese, English, abbreviation). The LLM is responsible for picking a diverse set of terms that span all requirements in one query.
 
 ### Step 2 — Check stock for matched items in bulk
 
@@ -126,6 +126,8 @@ The LLM decides whether a search result satisfies the requirement:
 ### Step 4 — Report
 
 For each requirement, report: matched item, stock batch(es), remaining quantity, usage_unit, and package unit. If a requirement cannot be found after trying all reasonable search terms, mark it as missing.
+
+Before update, disable, transfer, or stock mutation commands, retrieve and verify the exact item or stock ID; do not choose between same-name records by name alone.
 
 ### Why not `scitex inventory check`
 

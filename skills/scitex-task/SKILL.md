@@ -1,6 +1,6 @@
 ---
 name: scitex-task
-description: "Use when the user asks in natural language to do, implement, run, arrange, schedule, or execute a Scientex task. First check available task types, then create either a single-stage task or a multi-stage workflow task once the required inputs are clear."
+description: "Use when the user asks to create, arrange, inspect, or execute a task in the Scientex lab task scheduling system. First resolve a live task type, then create either a single-stage task or a multi-stage workflow task once the required inputs are clear."
 metadata:
   requires:
     bins: ["scitex"]
@@ -26,17 +26,25 @@ Before API calls, read `../scitex-shared/SKILL.md`.
 
 ## Core Rule
 
-Never assume the task type exists. Always check available task types first:
+Never assume the task type exists. Distinguish catalog discovery from lab availability:
 
 ```bash
+# Discover candidates in the global catalog when the request supplies a key/name/goal.
+scitex tasks types --search <keyword> -f json
+
+# Before creation, verify the selected ID is enabled and available to the target lab.
 scitex tasks types -f json
 ```
 
-Use query options when the request needs narrowing:
+`--search`, `--filters`, `--skip`, and non-default `--limit` currently query the global catalog. They cannot be combined with `--lab-id`; the backend does not yet expose lab-scoped search. A catalog hit is not proof that the type is enabled or available in the intended lab.
+
+Use `--filters` only when it materially narrows the catalog. For example:
 
 ```bash
-scitex tasks types --search <keyword> --filters '<json_filter_array>' -f json
+scitex tasks types --search <keyword> --filters '[{"field":"category","operator":"eq","value":"COMPUTE"}]' -f json
 ```
+
+If a catalog search has no result, retry with a concise synonym. Do not conclude that no type exists until the lab list and relevant `input_schema` have been checked. If `has_next` is true, inspect further pages before claiming the candidate set is complete.
 
 ## Inventory Gate For Experiment Tasks
 
@@ -44,7 +52,7 @@ When the task represents an experiment, lab execution, sample processing, PCR, s
 
 1. Read `../scitex-inventory/SKILL.md`.
 2. Extract inventory requirements and assign stable `requirement_key` values.
-3. **Actively search** for each requirement — do NOT rely on `scitex inventory check`. Use `scitex inventory items --search` with multiple search terms per requirement, then `scitex inventory summary --search` to check stock. The LLM is responsible for matching search results to requirements.
+3. **Actively search** for each requirement. Start with an exact catalog number/name plus category, supplier, or filters when known; expand to synonyms only for zero or ambiguous results. After selecting a precise `item_id`, use `scitex inventory check` as a non-reserving stock aggregate and inspect the matching batches.
 4. If any requirement cannot be matched to in-stock items after thorough searching, do not create an executable task. Report the missing inventory and move to ordering/restock discussion.
 5. Do not checkout inventory during task planning or task creation.
 6. During actual execution, re-search inventory and use `checkout` or `checkout-item` with `task_id`, `part_id`, and `requirement_key`.
@@ -58,7 +66,7 @@ Active search is a point-in-time snapshot — it is not a reservation or atomic 
   {
     "field": "category",
     "operator": "eq",
-    "value": "compute"
+    "value": "COMPUTE"
   }
 ]
 ```
@@ -293,8 +301,8 @@ User: `帮我建一个样品 QC 任务`
 
 Workflow:
 
-1. Run `scitex tasks types -f json`.
-2. Match the best single task type.
+1. Run `scitex tasks types --search "sample qc" -f json`, then verify the selected ID with `scitex tasks types -f json`.
+2. Match the best enabled lab-available single task type.
 3. Inspect required fields such as `sample_ids`.
 4. Ask for missing inputs.
 5. Create with `scitex tasks create`.
@@ -305,8 +313,8 @@ User: `帮我建一个先算 Tm 再做人工 QC 的任务`
 
 Workflow:
 
-1. Run `scitex tasks types -f json`.
-2. Match one compute task type for Tm and one staff task type for QC.
+1. Search the catalog for `tm` and `qc`, then verify both selected IDs with `scitex tasks types -f json`.
+2. Match one enabled lab-available compute task type for Tm and one enabled lab-available staff task type for QC.
 3. Collect the sequence, sample identifiers, and assignee if needed.
 4. Build a workflow payload with two parts and one dependency.
 5. Create with `scitex tasks create-workflow`.

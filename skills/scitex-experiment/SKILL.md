@@ -1,6 +1,6 @@
 ---
 name: scitex-experiment
-description: "Use when planning, creating, arranging, or executing Scientex experiments where reagents, consumables, primers, samples, or other inventory may be required. Enforces inventory checks before planning/tasks, ordering flow for missing stock, and task-linked checkout during execution."
+description: "Use when planning or executing inventory-aware Scientex experiment work, including task-linked inventory checks, restocking decisions, and checkout during execution."
 metadata:
   requires:
     bins: ["scitex"]
@@ -18,7 +18,7 @@ Before API calls, read:
 ## Core Workflow
 
 1. Extract inventory requirements from the experiment plan. Give every requirement a stable `requirement_key`, such as `pcr.polymerase`, `pcr.dntp`, or `sequencing.primer_f`.
-2. **Actively search** for each requirement in inventory — do NOT rely on a single aggregate check command. Use multiple search terms per requirement (Chinese, English, abbreviation, synonym, catalog number if known). For each requirement:
+2. **Actively search** for each requirement in inventory. Start with an exact catalog number/name plus `--category`, `--supplier`, or filters when known; expand to Chinese/English synonyms only for zero or ambiguous results. For each requirement:
 
    a. Search for matching items:
    ```bash
@@ -26,12 +26,12 @@ Before API calls, read:
    scitex inventory items --search "<term2>" -f json
    ```
 
-   b. For each candidate item found, check stock:
+   b. Once a candidate `item_id` is selected, check its stock without treating the result as a reservation:
    ```bash
-   scitex inventory summary --search "<matched_item_name>" -f json
+   scitex inventory check requirements.json -f json
    ```
 
-   c. If the item is found and has stock, record the item_id, stock batch id(s), remaining quantity, and unit.
+   c. If the item is found and has stock, record the item_id, stock batch id(s), remaining quantity, and unit. Re-search immediately before execution.
 
 3. The LLM is responsible for matching: determine whether a search result really satisfies the requirement (name similarity, category match, unit compatibility). Do not expect exact name matches — inventory names may use Chinese, abbreviations, or supplier-specific naming.
 4. If a requirement can be matched to in-stock items after thorough searching, mark it available.

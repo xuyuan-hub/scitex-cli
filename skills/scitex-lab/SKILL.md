@@ -51,7 +51,7 @@ Roles are backend strings. Common project roles include `pi`, `procurement`, `fi
 
 ## Rules
 
-- Confirm before removing members, changing roles, approving applications, rejecting applications, or editing approval rules.
+- Confirm before removing members, changing roles, approving applications, rejecting applications, or editing approval rules. First retrieve the invitation, application, member, or rule list and verify the exact target ID and current state.
 - Use the lowest sufficient role.
 - Read `lab members -f json` before changing a member role unless the user provides an exact `user_id`.
 - Do not assume role hierarchy is enforced by the CLI.

@@ -1,6 +1,6 @@
 ---
 name: scitex-admin
-description: "Use when creating, updating, deleting, or managing Scientex admin-only task type catalog definitions. Normal task execution remains under scitex-task; this skill is for catalog administration such as creating reusable task types."
+description: "Use when creating, deleting, or managing Scientex admin-only task type catalog definitions. Normal task execution remains under scitex-task; this skill is for catalog administration such as creating reusable task types."
 metadata:
   requires:
     bins: ["scitex"]
@@ -146,12 +146,13 @@ If `required` is present, every required field should exist in `properties`.
 
 ## Workflow
 
-1. Translate the user's task-type idea into a clear `TaskTypeCreate` JSON payload.
+1. Search `scitex tasks types --search <key-or-name> -f json` before creating; treat matches as catalog candidates and avoid duplicate keys.
+2. Translate the user's task-type idea into a clear `TaskTypeCreate` JSON payload.
 2. Prefer stable lowercase snake_case keys for `key` and schema property names.
 3. Include only fields supported by the OpenAPI schema.
 4. Save the payload as a temporary JSON file.
 5. If the user provides SOP or work order content, write those to separate files now.
-6. Run create with inline document flags when files are ready:
+6. Show the payload, key, category, and documents to be created; obtain confirmation before the write operation. Then run create with inline document flags when files are ready:
 
 ```bash
 # Create with SOP and work order in one step
@@ -219,7 +220,7 @@ Use deletion only when the user asks to remove a task type or when cleaning up a
 scitex admin task-types delete <TASK_TYPE_ID>
 ```
 
-When deleting a task type that may be used by existing tasks, warn the user that removal can affect catalog availability.
+When deleting a task type that may be used by existing tasks, warn the user that removal can affect catalog availability and obtain explicit confirmation. Apply the same confirmation rule to staff bindings and document uploads/deletions.
 
 ## Permission Handling
 

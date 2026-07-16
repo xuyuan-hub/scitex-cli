@@ -1,6 +1,10 @@
 ---
 name: scitex-evo
 description: "Use when operating Scientex evo compute TaskTypes for molecular design workflows: Tm calculation, codon optimization, NGS primer design/verification, barcode checks, complete primer assembly, correspondence files, EXP2 BsaI Golden Gate primer/library design, and multi-stage evo workflows that chain compute TaskTypes with dependencies."
+metadata:
+  requires:
+    bins: ["scitex"]
+  cliHelp: "scitex tasks --help"
 ---
 
 # Scientex Evo Workflows
@@ -15,7 +19,7 @@ Always query the live task type before creating a task:
 scitex tasks types --search <keyword> -f json
 ```
 
-Match by `key`, `display_name`, `description`, and `input_schema`. Prefer enabled compute TaskTypes. Do not hardcode stale TaskType IDs if a live search can find the type.
+`--search` discovers candidates in the global catalog. Before creation, run `scitex tasks types -f json` and verify that the selected ID is enabled and available to the current lab. Match by `key`, `display_name`, `description`, and `input_schema`; do not hardcode stale TaskType IDs.
 
 ## Common Evo TaskTypes
 
@@ -53,7 +57,7 @@ Use `../scitex-task/SKILL.md` plus this skill when the user asks to chain evo co
 
 Rules:
 
-- Query live TaskTypes for every stage, for example `scitex tasks types --search tm -f json` and `scitex tasks types --search ngs -f json`.
+- Query catalog candidates for every stage, then verify all selected IDs against the current lab list.
 - Use `scitex tasks create-workflow <json_file> -f json`.
 - Put `task_type_id` on each `parts[*]`; do not put a root-level `task_type_id` on workflow payloads.
 - Give each stage a stable `client_key`.
@@ -145,7 +149,7 @@ Required inputs normally include:
 - `aa_start`
 - `aa_end`
 
-Because `plasmid` is typed as `string` (not `format: file`), you **must** include a placeholder value in `input_data` to pass validation:
+Because `plasmid` is typed as `string` (not `format: file`), the current multipart route cannot safely create this task: a placeholder passes validation but is not propagated into the task part that the worker reads.
 
 ```json
 {
@@ -166,13 +170,7 @@ Because `plasmid` is typed as `string` (not `format: file`), you **must** includ
 }
 ```
 
-Create it:
-
-```bash
-scitex tasks create task.json --file-field plasmid=data/evo/Y70001_CasY7_plasmid.dna -f json
-```
-
-**Known limitation**: The server replaces the root task's `input_data.plasmid` with a `FileFieldRef`, but the part's `input_data.plasmid` keeps the `"placeholder"` string. The worker reads from the part's input_data and may fail. This is a backend bug — file references are not propagated from root task to parts during multipart creation.
+**Blocker — do not submit this task yet.** The server replaces the root task's `input_data.plasmid` with a `FileFieldRef`, but the part keeps the placeholder string and the worker may fail. Report the backend compatibility blocker and wait for a supported field contract or multipart propagation fix.
 
 ## Results
 

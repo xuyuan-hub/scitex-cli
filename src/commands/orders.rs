@@ -25,6 +25,22 @@ pub enum OrdersCommand {
         skip: u32,
         #[arg(short, long, default_value_t = 100)]
         limit: u32,
+        #[arg(long)]
+        order_type: Option<String>,
+        #[arg(long)]
+        supplier_name: Option<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        price_min: Option<String>,
+        #[arg(long)]
+        price_max: Option<String>,
+        /// Inclusive ISO 8601 date or datetime lower bound.
+        #[arg(long)]
+        date_from: Option<String>,
+        /// Inclusive ISO 8601 date or datetime upper bound.
+        #[arg(long)]
+        date_to: Option<String>,
     },
     /// List orders waiting for my approval.
     PendingApprovals,
@@ -78,8 +94,30 @@ pub async fn run(
             let stats = client.get_order_stats().await?;
             print_result(&stats, format);
         }
-        OrdersCommand::List { skip, limit } => {
-            let orders = client.list_orders(*skip, *limit).await?;
+        OrdersCommand::List {
+            skip,
+            limit,
+            order_type,
+            supplier_name,
+            status,
+            price_min,
+            price_max,
+            date_from,
+            date_to,
+        } => {
+            let orders = client
+                .list_orders(
+                    *skip,
+                    *limit,
+                    order_type.as_deref(),
+                    supplier_name.as_deref(),
+                    status.as_deref(),
+                    price_min.as_deref(),
+                    price_max.as_deref(),
+                    date_from.as_deref(),
+                    date_to.as_deref(),
+                )
+                .await?;
             match format {
                 OutputFormat::Json => print_result(&orders, format),
                 OutputFormat::Text => {

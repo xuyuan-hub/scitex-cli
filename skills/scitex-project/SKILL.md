@@ -20,7 +20,9 @@ scitex projects list -f json
 scitex projects get <PROJECT_ID> -f json
 scitex projects create '<JSON>' -f json
 scitex projects update <PROJECT_ID> '<JSON>' -f json
-scitex projects delete <PROJECT_ID> -f json
+scitex projects members <PROJECT_ID> -f json
+scitex projects add-member <PROJECT_ID> <USER_ID> [--role member] -f json
+scitex projects remove-member <PROJECT_ID> <USER_ID> -f json
 ```
 
 ## Project by Slug
@@ -29,11 +31,11 @@ scitex projects delete <PROJECT_ID> -f json
 scitex project <SLUG> info -f json
 ```
 
-Use the `slug` field from `projects list` to identify the project, then check its dedicated skill (e.g. `scitex-tashan`) for available workflow commands.
+If the user already knows the slug, query `scitex project <SLUG> info -f json` directly. Otherwise use `projects list` to identify it, then check its dedicated skill (e.g. `scitex-tashan`) for available workflow commands.
 
 ## Rules
 
 - Do not invent commands — check `scitex project <SLUG> --help` or the project-specific skill.
 - Prefer `-f json` for machine-parsable output.
-- Confirm before creating, updating, or deleting project records.
+- Confirm before creating or updating project records, or changing project membership.
 - For project-specific workflows, delegate to the corresponding `scitex-<project>` skill.

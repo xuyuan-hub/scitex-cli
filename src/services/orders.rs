@@ -1,7 +1,7 @@
 use crate::api_response::{envelope_data, extract_object, extract_paginated, PaginatedList};
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
-use crate::services::path_segment_encode;
+use crate::services::{path_segment_encode, url_encode};
 use crate::types::Order;
 
 impl ScientexClient {
@@ -9,8 +9,26 @@ impl ScientexClient {
         &self,
         skip: u32,
         limit: u32,
+        order_type: Option<&str>,
+        supplier_name: Option<&str>,
+        status: Option<&str>,
+        price_min: Option<&str>,
+        price_max: Option<&str>,
+        date_from: Option<&str>,
+        date_to: Option<&str>,
     ) -> Result<PaginatedList<Order>, ScientexError> {
-        let resp: serde_json::Value = self.http.get(&list_orders_path(skip, limit)).await?;
+        let path = list_orders_path(
+            skip,
+            limit,
+            order_type,
+            supplier_name,
+            status,
+            price_min,
+            price_max,
+            date_from,
+            date_to,
+        );
+        let resp: serde_json::Value = self.http.get(&path).await?;
         extract_paginated(resp)
     }
 
@@ -133,8 +151,35 @@ impl ScientexClient {
     }
 }
 
-fn list_orders_path(skip: u32, limit: u32) -> String {
-    format!("/orders/?skip={skip}&limit={limit}")
+fn list_orders_path(
+    skip: u32,
+    limit: u32,
+    order_type: Option<&str>,
+    supplier_name: Option<&str>,
+    status: Option<&str>,
+    price_min: Option<&str>,
+    price_max: Option<&str>,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> String {
+    let mut path = format!("/orders/?skip={skip}&limit={limit}");
+    for (name, value) in [
+        ("order_type", order_type),
+        ("supplier_name", supplier_name),
+        ("status", status),
+        ("price_min", price_min),
+        ("price_max", price_max),
+        ("date_from", date_from),
+        ("date_to", date_to),
+    ] {
+        if let Some(value) = value.filter(|value| !value.is_empty()) {
+            path.push('&');
+            path.push_str(name);
+            path.push('=');
+            path.push_str(&url_encode(value));
+        }
+    }
+    path
 }
 
 fn order_path(order_id: &str) -> String {
@@ -159,7 +204,28 @@ mod tests {
 
     #[test]
     fn builds_order_collection_path_with_pagination() {
-        assert_eq!(list_orders_path(20, 50), "/orders/?skip=20&limit=50");
+        assert_eq!(
+            list_orders_path(20, 50, None, None, None, None, None, None, None),
+            "/orders/?skip=20&limit=50"
+        );
+    }
+
+    #[test]
+    fn builds_order_collection_path_with_filters() {
+        assert_eq!(
+            list_orders_path(
+                0,
+                100,
+                Some("primer synthesis"),
+                Some("Sangon & Co"),
+                Some("pending_approval"),
+                Some("10.50"),
+                Some("200"),
+                Some("2026-07-01"),
+                Some("2026-07-31"),
+            ),
+            "/orders/?skip=0&limit=100&order_type=primer+synthesis&supplier_name=Sangon+%26+Co&status=pending_approval&price_min=10.50&price_max=200&date_from=2026-07-01&date_to=2026-07-31"
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 ---
 name: scitex-templates
 version: 0.1.0
-description: "Use when listing, creating, updating, deleting, selecting, or applying Scientex order-info templates for primer synthesis or sequencing orders."
+description: "Use when listing, creating, updating, deleting, selecting, or retrieving Scientex order-info templates for primer synthesis or sequencing orders, then applying their defaults while composing an order."
 metadata:
   requires:
     bins: ["scitex"]
@@ -46,7 +46,7 @@ Contact fields such as `customer_name`, `customer_phone`, and `customer_email` b
 4. Create the template JSON from `OrderInfoTemplateCreate`.
 5. Confirm with the user.
 6. Run `scitex templates create template.json -f json`.
-7. If needed, run `scitex templates set-default <TEMPLATE_ID> -f json`.
+7. If needed, retrieve `scitex templates get <TEMPLATE_ID> -f json`, verify its order type and contents, then run `scitex templates set-default <TEMPLATE_ID> -f json`.
 
 ## Rules
 

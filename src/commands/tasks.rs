@@ -28,15 +28,16 @@ pub struct TasksArgs {
 
 #[derive(Subcommand)]
 pub enum TasksCommand {
-    /// List task types available to the current lab.
+    /// List task types available to the current lab. Search/filter options query the global catalog.
     Types {
         #[arg(short, long, default_value_t = 0)]
         skip: u32,
         #[arg(short, long, default_value_t = 100)]
         limit: u32,
+        /// Search the global task type catalog (not limited to the current lab).
         #[arg(long)]
         search: Option<String>,
-        /// JSON array of filter objects, e.g. [{"field":"category","operator":"eq","value":"compute"}].
+        /// Filter the global task type catalog as JSON, e.g. [{"field":"category","operator":"eq","value":"COMPUTE"}].
         #[arg(long)]
         filters: Option<String>,
         #[arg(long)]
@@ -188,6 +189,7 @@ pub async fn run(
     config: &Arc<Config>,
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
+    validate_task_type_query_scope(&args.command)?;
     let client = ScientexClient::new(Arc::clone(config))?;
 
     match &args.command {
@@ -198,10 +200,8 @@ pub async fn run(
             filters,
             lab_id,
         } => {
-            let should_search_task_types = search.as_deref().is_some_and(|value| !value.is_empty())
-                || filters.as_deref().is_some_and(|value| !value.is_empty())
-                || *skip != 0
-                || *limit != 100;
+            let should_search_task_types =
+                task_type_query_is_global(*skip, *limit, search, filters);
             let types = if should_search_task_types {
                 client
                     .search_task_types(*skip, *limit, search.as_deref(), filters.as_deref())
@@ -352,6 +352,40 @@ pub async fn run(
         TasksCommand::My { command } => run_my_tasks(&client, command, format).await?,
     }
 
+    Ok(())
+}
+
+fn task_type_query_is_global(
+    skip: u32,
+    limit: u32,
+    search: &Option<String>,
+    filters: &Option<String>,
+) -> bool {
+    search.as_deref().is_some_and(|value| !value.is_empty())
+        || filters.as_deref().is_some_and(|value| !value.is_empty())
+        || skip != 0
+        || limit != 100
+}
+
+fn validate_task_type_query_scope(command: &TasksCommand) -> anyhow::Result<()> {
+    let TasksCommand::Types {
+        skip,
+        limit,
+        search,
+        filters,
+        lab_id,
+    } = command
+    else {
+        return Ok(());
+    };
+    if task_type_query_is_global(*skip, *limit, search, filters) && lab_id.is_some() {
+        anyhow::bail!(
+            "`--lab-id` cannot be combined with task type search, filters, or pagination: \
+             the current backend only supports those options on the global catalog. \
+             Query the catalog first, then run `scitex tasks types --lab-id <LAB_ID>` \
+             to verify the selected type is available to that lab."
+        );
+    }
     Ok(())
 }
 
@@ -1509,6 +1543,14 @@ mod tests {
             }
             _ => panic!("expected task types command"),
         }
+    }
+
+    #[test]
+    fn rejects_lab_id_with_global_task_type_query() {
+        let args = parse_tasks(&["tasks", "types", "--search", "tm", "--lab-id", "lab-1"]);
+        let error =
+            validate_task_type_query_scope(&args.command).expect_err("scope must be rejected");
+        assert!(error.to_string().contains("cannot be combined"));
     }
 
     #[test]

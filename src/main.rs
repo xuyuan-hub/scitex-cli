@@ -154,7 +154,8 @@ async fn main() {
 
         // Always record the error locally
         let mut history = ErrorHistory::load();
-        history.record(&fingerprint, &cmd, error_type_label(&e), &e.to_string());
+        let sanitized_error = sanitize_error_text(&e.to_string());
+        history.record(&fingerprint, &cmd, error_type_label(&e), &sanitized_error);
 
         eprintln!("{}: {e}", "Error".red().bold());
 
@@ -179,24 +180,43 @@ async fn main() {
 
 fn command_context() -> String {
     let args: Vec<String> = std::env::args().collect();
+    command_context_from_args(&args)
+}
+
+fn command_context_from_args(args: &[String]) -> String {
     if args.len() < 2 {
         return "scitex".to_string();
     }
     let mut ctx = String::from("scitex");
     let mut skip_next = false;
-    for (_i, arg) in args.iter().enumerate().skip(1) {
+    for arg in args.iter().skip(1) {
         if skip_next {
+            ctx.push_str(" ***");
             skip_next = false;
             continue;
         }
-        if arg == "--token" || arg == "-t" || arg == "--password" {
-            ctx.push_str(" ***");
-            skip_next = true;
-        } else if arg.starts_with("--token=")
-            || arg.starts_with("-t=")
-            || arg.starts_with("--password=")
-        {
-            ctx.push_str(" ***");
+        if is_sensitive_option(arg) {
+            ctx.push(' ');
+            if let Some((option, _)) = arg.split_once('=') {
+                ctx.push_str(option);
+                ctx.push_str("=***");
+            } else {
+                ctx.push_str(arg);
+                skip_next = true;
+            }
+        } else if arg.starts_with("--") || (arg.starts_with('-') && arg.len() == 2) {
+            // Error reports need a command shape, not arbitrary option values. This also
+            // keeps file paths passed through non-sensitive flags out of reports.
+            let option = arg.split_once('=').map_or(arg.as_str(), |(name, _)| name);
+            ctx.push(' ');
+            ctx.push_str(option);
+            if arg.contains('=') {
+                ctx.push_str("=***");
+            } else {
+                skip_next = true;
+            }
+        } else if is_local_path(arg) {
+            ctx.push_str(" [PATH]");
         } else {
             ctx.push(' ');
             ctx.push_str(arg);
@@ -205,8 +225,67 @@ fn command_context() -> String {
     ctx
 }
 
+fn is_sensitive_option(arg: &str) -> bool {
+    let option = arg.split_once('=').map_or(arg, |(name, _)| name);
+    matches!(
+        option,
+        "--token"
+            | "-t"
+            | "--password"
+            | "--current"
+            | "--new"
+            | "--access-token"
+            | "--api-key"
+            | "--authorization"
+            | "--docs-folder-token"
+            | "--secret"
+    )
+}
+
+fn is_local_path(value: &str) -> bool {
+    let value = value.trim_matches(|ch: char| matches!(ch, '\'' | '\"' | ',' | ':' | ';'));
+    let filename_extension = value.rsplit_once('.').map(|(_, extension)| extension);
+    value.starts_with("~/")
+        || value.starts_with("./")
+        || value.starts_with("../")
+        || value.starts_with("/Users/")
+        || value.starts_with("/home/")
+        || value.starts_with("/private/")
+        || value.starts_with("/tmp/")
+        || value.starts_with("C:\\")
+        || value.starts_with("file://")
+        || matches!(
+            filename_extension,
+            Some(
+                "json"
+                    | "csv"
+                    | "tsv"
+                    | "xlsx"
+                    | "xls"
+                    | "fasta"
+                    | "fa"
+                    | "dna"
+                    | "gb"
+                    | "pdf"
+                    | "docx"
+                    | "md"
+                    | "txt"
+            )
+        )
+}
+
+fn sanitize_error_text(text: &str) -> String {
+    let args = std::iter::once("scitex".to_string())
+        .chain(text.split_whitespace().map(ToOwned::to_owned))
+        .collect::<Vec<_>>();
+    command_context_from_args(&args)
+        .strip_prefix("scitex ")
+        .unwrap_or_default()
+        .to_string()
+}
+
 fn error_fingerprint(e: &anyhow::Error, cmd: &str) -> String {
-    let err_str = e.to_string();
+    let err_str = sanitize_error_text(&e.to_string());
     // Extract key error pattern: status code + path for HTTP errors,
     // or error variant name for other errors
     if let Some(scitex_err) = e.downcast_ref::<ScientexError>() {
@@ -284,8 +363,9 @@ async fn submit_error_report(
     let client = scitex_cli::client::ScientexClient::new(Arc::clone(config))?;
     let category = error_category(e);
     let title = format!("{cmd}: {}", error_type_label(e));
+    let detail = sanitize_error_text(&e.to_string());
     let description = format!(
-        "命令: {cmd}\n错误类型: {}\n错误详情: {e}\nCLI版本: {}\n平台: {}",
+        "命令: {cmd}\n错误类型: {}\n错误详情: {detail}\nCLI版本: {}\n平台: {}",
         error_type_label(e),
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
@@ -301,4 +381,40 @@ async fn submit_error_report(
 
     let resp = client.post_error_report(&report).await?;
     Ok(resp.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{command_context_from_args, sanitize_error_text};
+
+    #[test]
+    fn command_context_redacts_sensitive_option_values_and_paths() {
+        let args = vec![
+            "scitex".to_string(),
+            "me".to_string(),
+            "change-password".to_string(),
+            "--current".to_string(),
+            "old-secret".to_string(),
+            "--new=next-secret".to_string(),
+            "--docs-folder-token".to_string(),
+            "folder-secret".to_string(),
+            "--file".to_string(),
+            "/Users/alice/private.json".to_string(),
+        ];
+
+        assert_eq!(
+            command_context_from_args(&args),
+            "scitex me change-password --current *** --new=*** --docs-folder-token *** --file ***"
+        );
+    }
+
+    #[test]
+    fn error_text_redacts_known_secrets_and_local_paths() {
+        let text = "failed --new hunter2 while reading /Users/alice/private.json";
+        let redacted = sanitize_error_text(text);
+        assert!(!redacted.contains("hunter2"));
+        assert!(!redacted.contains("/Users/alice/private.json"));
+        assert!(redacted.contains("--new ***"));
+        assert!(redacted.contains("[PATH]"));
+    }
 }

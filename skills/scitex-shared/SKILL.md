@@ -12,16 +12,16 @@ metadata:
 
 Use this shared skill before using any domain-specific Scientex skill.
 
-## Setup
+## First Setup And Diagnostics
 
-Check the CLI:
+On first setup, after an installation problem, or when the user explicitly asks about updates, check the CLI:
 
 ```bash
 scitex --help
 scitex update check
 ```
 
-Authenticate before API calls:
+Before API calls, use `scitex status`; only run `scitex login` when it reports unauthenticated.
 
 ```bash
 scitex login
@@ -59,6 +59,7 @@ Do not invent CLI commands for backend endpoints that `scitex <domain> --help` d
 
 - Prefer `-f json` when the next step needs machine parsing.
 - Use `scitex <domain> --help` before guessing flags.
+- Prefer an exact `get` by ID, a documented server-side search/filter, or a status-scoped list. Use an unfiltered list only when the API has no narrower query or the user asks to browse the full set.
 - Confirm before write operations that mutate lab state, orders, templates, inventory, or profile data.
 - Use the domain skill matching the task:
   - Orders: `../scitex-orders/SKILL.md`
@@ -67,5 +68,7 @@ Do not invent CLI commands for backend endpoints that `scitex <domain> --help` d
   - Lab: `../scitex-lab/SKILL.md`
   - Project administration: `../scitex-project/SKILL.md`
   - Tashan project workflows: `../scitex-tashan/SKILL.md`
+  - Task execution: `../scitex-task/SKILL.md`
+  - Task type catalog administration: `../scitex-admin/SKILL.md`
   - Error Report: `../scitex-error-report/SKILL.md`
   - Users: `../scitex-users/SKILL.md`

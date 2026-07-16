@@ -17,7 +17,8 @@ Use `../scitex-templates/SKILL.md` whenever an order should use saved order-info
 ## Commands
 
 ```bash
-scitex orders list -f json
+scitex orders list --order-type primer_synthesis --status pending_approval --supplier-name sangon -f json
+scitex orders pending-approvals -f json
 scitex orders get <ORDER_ID> -f json
 scitex orders create-primer order.json -f json
 scitex orders create-sequencing order.json -f json
@@ -27,7 +28,13 @@ scitex orders download-primer-template primer_template.xlsx
 scitex orders download-sequencing-template sequencing_template.xlsx
 scitex orders upload-primer-excel primer.xlsx -f json
 scitex orders upload-sequencing-excel sequencing.xlsx -f json
+scitex orders resend <ORDER_ID> -f json
+scitex orders send <ORDER_ID> -f json
+scitex orders approve <ORDER_ID> -f json
+scitex orders reject <ORDER_ID> -f json
 ```
+
+Use `--price-min` / `--price-max` and `--date-from` / `--date-to` when the user supplies those bounds. Prefer `pending-approvals` for the current user's approval queue instead of scanning all orders.
 
 ## Schema
 
@@ -121,6 +128,10 @@ Only `primer_name` and `sequence` are required. All other fields are optional.
 1. Build the complete order JSON combining: order-level fields + primer items.
 2. Show the final summary to the user and ask for explicit confirmation.
 3. Run `scitex orders create-primer order.json -f json`.
+
+## Sequencing Order Workflow
+
+Use the same confirmed-template and contact-data flow for sequencing, but do not reuse primer item fields. Either download/upload the sequencing Excel template or inspect `SequencingOrderCreate` and `SequencingItemCreate`, review the parsed/constructed sequencing items with the user, then explicitly confirm and run `scitex orders create-sequencing order.json -f json`.
 
 ## Rules
 

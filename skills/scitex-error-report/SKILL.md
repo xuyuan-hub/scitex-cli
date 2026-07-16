@@ -50,12 +50,13 @@ scitex error-report \
    - `timeout` / `Timeout` → `performance`
 2. **Title** should be concise: `"<command>: <short error>"`, at most ~80 chars.
 3. **Description** should include:
-   - Exact command that was run (sanitized: remove `--token` values, passwords, file paths)
-   - Full error message
+   - Command shape with sensitive option values redacted; never include passwords, tokens, Feishu folder tokens, local paths, request headers, or uploaded file names.
+   - Sanitized error message without those values.
    - CLI version (from `scitex --version`)
    - OS the user is on
 4. **Use `-f json`** to capture the report ID on success.
 5. If the user is not logged in (`scitex status` shows unauthenticated), remind them to login first — error reports require authentication.
+6. Show the redacted title and description preview and obtain the user's consent before sending a manual report.
 
 ## Example
 
