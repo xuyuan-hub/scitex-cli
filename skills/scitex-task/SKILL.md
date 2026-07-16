@@ -32,25 +32,25 @@ Do not use `scitex tasks workflow`, `tasks update`, or `tasks update-file` for a
 
 ## Core Rule
 
-Never assume the task type exists. Distinguish catalog discovery from lab availability:
+Never assume the task type exists. Search the current lab's enabled, submit-able task definitions first, then fetch only the selected candidate's detail:
 
 ```bash
-# Discover candidates in the global catalog when the request supplies a key/name/goal.
+# Lightweight, lab-scoped candidate search.
 scitex tasks types --search <keyword> -f json
 
-# Before creation, verify the selected ID is enabled and available to the target lab.
-scitex tasks types -f json
+# Confirm the selected candidate's schema and user-visible documents.
+scitex tasks type <TASK_TYPE_ID> -f json
 ```
 
-`--search`, `--filters`, `--skip`, and non-default `--limit` currently query the global catalog. They cannot be combined with `--lab-id`; the backend does not yet expose lab-scoped search. A catalog hit is not proof that the type is enabled or available in the intended lab.
+`--search`, `--category`, `--skip`, and `--limit` are all lab-scoped and may be combined with `--lab-id`. The list returns only selection summaries; do not expect `input_schema`, output schema, document content, staff bindings, command templates, or queue settings until `tasks type <ID>`.
 
-Use `--filters` only when it materially narrows the catalog. For example:
+Use `--category` only when it materially narrows the candidates. For example:
 
 ```bash
-scitex tasks types --search <keyword> --filters '[{"field":"category","operator":"eq","value":"COMPUTE"}]' -f json
+scitex tasks types --search <keyword> --category compute -f json
 ```
 
-If a catalog search has no result, retry with a concise synonym. Do not conclude that no type exists until the lab list and relevant `input_schema` have been checked. If `has_next` is true, inspect further pages before claiming the candidate set is complete.
+If a lab search has no result, retry with a concise synonym. Do not conclude that no type exists until the relevant `input_schema` from a selected detail response has been checked. If `has_next` is true, inspect further pages before claiming the candidate set is complete.
 
 ## Inventory Gate For Experiment Tasks
 
@@ -86,19 +86,16 @@ Then decide:
 
 ## Matching Heuristics
 
-Compare the user request with each task type's:
+Compare list candidates with their:
 
 - `display_name`
 - `key`
 - `description`
 - `category`
-- `input_schema`
-- `output_schema`
-- `documents`
 
-Prefer enabled task types. Ignore disabled task types unless the user explicitly asks about unavailable options.
+Then fetch `tasks type <ID>` for the selected candidate and compare its `input_schema`, `output_schema`, and user-visible document metadata. The detail response is already limited to enabled lab-available types.
 
-Do not inspect, infer, or report task type staff bindings. Staff assignment or binding details are not part of the user-facing task type contract; if an API response includes `assigned_staff` or similar internal fields, ignore them.
+Do not inspect, infer, or report task type staff bindings, command templates, queues, or timeouts; those are not part of the user-facing task type contract and are not returned by lab endpoints.
 
 ## Single-Stage vs Workflow
 
@@ -301,7 +298,7 @@ User: `帮我建一个样品 QC 任务`
 
 Workflow:
 
-1. Run `scitex tasks types --search "sample qc" -f json`, then verify the selected ID with `scitex tasks types -f json`.
+1. Run `scitex tasks types --search "sample qc" -f json`, then fetch the selected ID with `scitex tasks type <ID> -f json`.
 2. Match the best enabled lab-available single task type.
 3. Inspect required fields such as `sample_ids`.
 4. Ask for missing inputs.
@@ -313,7 +310,7 @@ User: `帮我建一个先算 Tm 再做人工 QC 的任务`
 
 Workflow:
 
-1. Search the catalog for `tm` and `qc`, then verify both selected IDs with `scitex tasks types -f json`.
+1. Search the lab for `tm` and `qc`, then fetch both selected IDs with `scitex tasks type <ID> -f json`.
 2. Match one enabled lab-available compute task type for Tm and one enabled lab-available staff task type for QC.
 3. Collect the sequence, sample identifiers, and assignee if needed.
 4. Build a workflow payload with two parts and one dependency.

@@ -6,7 +6,7 @@
     "baseline_date": "2026-07-16",
     "info_version": "0.1.0",
     "fixture": "tests/fixtures/openapi.json",
-    "fixture_sha256": "a961c1fa3173d4a2703f86f985f1ba6b812b73738d106d8ace2500401f3e072e"
+    "fixture_sha256": "b0e2a633b8bab8a09f1f7d0ee71a071aba6f05c0477f9891ba9341363d9e85d7"
   },
-  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-16 pinned OpenAPI fixture; this baseline adds task-list exclude_status."
+  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-16 pinned OpenAPI fixture; this baseline adds lab-scoped task-type search summaries and task-type detail retrieval."
 }

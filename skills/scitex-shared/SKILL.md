@@ -72,6 +72,8 @@ Do not treat all task endpoints as the same view:
 
 The same task can appear in all three views. Route by the user's role and intent, and never use an administrator endpoint as a fallback for a lab member.
 
+Task definition discovery follows the same boundary: `scitex tasks types --search <keyword>` and `scitex tasks type <TYPE_ID>` use the current lab's enabled, user-submit-able definitions. The list is a lightweight candidate view; fetch the selected definition's detail before constructing task input JSON. Do not use the administrator `/task-types` catalog for a normal lab user.
+
 - Use the domain skill matching the task:
   - Orders: `../scitex-orders/SKILL.md`
   - Templates: `../scitex-templates/SKILL.md`

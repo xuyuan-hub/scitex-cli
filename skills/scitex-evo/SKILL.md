@@ -17,9 +17,10 @@ Always query the live task type before creating a task:
 
 ```bash
 scitex tasks types --search <keyword> -f json
+scitex tasks type <TASK_TYPE_ID> -f json
 ```
 
-`--search` discovers candidates in the global catalog. Before creation, run `scitex tasks types -f json` and verify that the selected ID is enabled and available to the current lab. Match by `key`, `display_name`, `description`, and `input_schema`; do not hardcode stale TaskType IDs.
+`--search` discovers candidates only in the current lab's enabled task definitions. The list is lightweight; fetch the selected `tasks type <ID>` detail before matching its `input_schema`. Match by `key`, `display_name`, `description`, and input schema; do not hardcode stale TaskType IDs.
 
 ## Common Evo TaskTypes
 
@@ -57,7 +58,7 @@ Use `../scitex-task/SKILL.md` plus this skill when the user asks to chain evo co
 
 Rules:
 
-- Query catalog candidates for every stage, then verify all selected IDs against the current lab list.
+- Query lab-scoped candidates for every stage, then fetch detail for every selected ID before constructing input data.
 - Use `scitex tasks create-workflow <json_file> -f json`.
 - Put `task_type_id` on each `parts[*]`; do not put a root-level `task_type_id` on workflow payloads.
 - Give each stage a stable `client_key`.

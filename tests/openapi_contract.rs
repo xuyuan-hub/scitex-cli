@@ -157,6 +157,108 @@ fn task_type_catalog_search_parameters_match_backend() {
 }
 
 #[test]
+fn lab_task_type_search_parameters_match_backend() {
+    let doc = load_openapi();
+    let parameters = query_parameter_names(&doc, "~1api~1v1~1lab~1tasks~1task-types", "get");
+    for expected in ["skip", "limit", "search", "category"] {
+        assert!(
+            parameters.contains(expected),
+            "lab task type query parameter `{expected}` not found in OpenAPI: {parameters:?}"
+        );
+    }
+    assert!(
+        !parameters.contains("filters"),
+        "lab task type query must not expose administrator catalog filters: {parameters:?}"
+    );
+
+    for path in [
+        "~1api~1v1~1lab~1tasks~1task-types",
+        "~1api~1v1~1lab~1tasks~1task-types~1{type_id}",
+    ] {
+        let has_current_lab_header = doc
+            .pointer(&format!("/paths/{path}/get/parameters"))
+            .and_then(|value| value.as_array())
+            .is_some_and(|parameters| {
+                parameters.iter().any(|parameter| {
+                    parameter.get("in").and_then(|value| value.as_str()) == Some("header")
+                        && parameter.get("name").and_then(|value| value.as_str())
+                            == Some("X-Current-Lab")
+                })
+            });
+        assert!(
+            has_current_lab_header,
+            "lab task type endpoint `{path}` must preserve X-Current-Lab scoping"
+        );
+    }
+}
+
+#[test]
+fn lab_task_type_list_and_detail_responses_match_user_safe_contract() {
+    let doc = load_openapi();
+    let list_response = doc.pointer(
+        "/paths/~1api~1v1~1lab~1tasks~1task-types/get/responses/200/content/application~1json/schema/$ref",
+    );
+    assert_eq!(
+        list_response.and_then(|value| value.as_str()),
+        Some("#/components/schemas/LabTaskTypeListResponse")
+    );
+
+    let detail_response = doc.pointer(
+        "/paths/~1api~1v1~1lab~1tasks~1task-types~1{type_id}/get/responses/200/content/application~1json/schema/$ref",
+    );
+    assert_eq!(
+        detail_response.and_then(|value| value.as_str()),
+        Some("#/components/schemas/LabTaskTypeDetailResponse")
+    );
+
+    let list_properties = doc
+        .pointer("/components/schemas/LabTaskTypeListItem/properties")
+        .and_then(|value| value.as_object())
+        .expect("LabTaskTypeListItem properties must exist");
+    for expected in [
+        "id",
+        "key",
+        "display_name",
+        "category",
+        "input_summary",
+        "has_sop",
+        "has_work_order",
+        "is_assignable",
+    ] {
+        assert!(
+            list_properties.contains_key(expected),
+            "LabTaskTypeListItem is missing `{expected}`"
+        );
+    }
+    for forbidden in [
+        "input_schema",
+        "output_schema",
+        "documents",
+        "command_template",
+        "timeout_seconds",
+        "queue",
+        "assigned_staff",
+        "enabled",
+    ] {
+        assert!(
+            !list_properties.contains_key(forbidden),
+            "LabTaskTypeListItem must remain lightweight and omit `{forbidden}`"
+        );
+    }
+
+    let detail_properties = doc
+        .pointer("/components/schemas/LabTaskTypeDetailResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("LabTaskTypeDetailResponse properties must exist");
+    for expected in ["input_schema", "output_schema", "documents"] {
+        assert!(
+            detail_properties.contains_key(expected),
+            "LabTaskTypeDetailResponse is missing `{expected}`"
+        );
+    }
+}
+
+#[test]
 fn order_list_filter_parameters_match_backend() {
     let doc = load_openapi();
     let parameters = query_parameter_names(&doc, "~1api~1v1~1orders~1", "get");

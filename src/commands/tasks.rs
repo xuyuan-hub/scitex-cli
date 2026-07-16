@@ -16,8 +16,8 @@ use crate::output::{
     unique_output_path as unique_download_path, OutputFormat,
 };
 use crate::types::{
-    StaffAssignmentItem, Task, TaskDocument, TaskPart, TaskResult, TaskSummary, TaskType,
-    WorkflowDetail,
+    LabTaskTypeDetail, LabTaskTypeListItem, StaffAssignmentItem, Task, TaskDocument, TaskPart,
+    TaskResult, TaskSummary, WorkflowDetail,
 };
 
 #[derive(Args)]
@@ -28,18 +28,24 @@ pub struct TasksArgs {
 
 #[derive(Subcommand)]
 pub enum TasksCommand {
-    /// List task types available to the current lab. Search/filter options query the global catalog.
+    /// Search lightweight task type summaries available to the current lab.
     Types {
         #[arg(short, long, default_value_t = 0)]
         skip: u32,
-        #[arg(short, long, default_value_t = 100)]
+        #[arg(short, long, default_value_t = 20)]
         limit: u32,
-        /// Search the global task type catalog (not limited to the current lab).
+        /// Search key, display name, description, or scope within the current lab.
         #[arg(long)]
         search: Option<String>,
-        /// Filter the global task type catalog as JSON, e.g. [{"field":"category","operator":"eq","value":"COMPUTE"}].
+        /// Restrict results to one task type category.
         #[arg(long)]
-        filters: Option<String>,
+        category: Option<TaskTypeCategoryArg>,
+        #[arg(long)]
+        lab_id: Option<String>,
+    },
+    /// Show submission schema and user-visible documents for one lab-available task type.
+    Type {
+        id: String,
         #[arg(long)]
         lab_id: Option<String>,
     },
@@ -174,6 +180,21 @@ pub enum AssignmentStatusArg {
     Completed,
 }
 
+#[derive(Debug, Clone, ValueEnum)]
+pub enum TaskTypeCategoryArg {
+    Staff,
+    Compute,
+}
+
+impl TaskTypeCategoryArg {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TaskTypeCategoryArg::Staff => "STAFF",
+            TaskTypeCategoryArg::Compute => "COMPUTE",
+        }
+    }
+}
+
 impl AssignmentStatusArg {
     fn as_str(&self) -> &'static str {
         match self {
@@ -189,7 +210,6 @@ pub async fn run(
     config: &Arc<Config>,
     format: &OutputFormat,
 ) -> anyhow::Result<()> {
-    validate_task_type_query_scope(&args.command)?;
     let client = ScientexClient::new(Arc::clone(config))?;
 
     match &args.command {
@@ -197,21 +217,28 @@ pub async fn run(
             skip,
             limit,
             search,
-            filters,
+            category,
             lab_id,
         } => {
-            let should_search_task_types =
-                task_type_query_is_global(*skip, *limit, search, filters);
-            let types = if should_search_task_types {
-                client
-                    .search_task_types(*skip, *limit, search.as_deref(), filters.as_deref())
-                    .await?
-            } else {
-                client.list_lab_task_types(lab_id.as_deref()).await?
-            };
+            let types = client
+                .list_lab_task_types(
+                    *skip,
+                    *limit,
+                    search.as_deref(),
+                    category.as_ref().map(TaskTypeCategoryArg::as_str),
+                    lab_id.as_deref(),
+                )
+                .await?;
             match format {
                 OutputFormat::Json => print_result(&types, format),
-                OutputFormat::Text => print_task_types(&types),
+                OutputFormat::Text => print_lab_task_types(&types),
+            }
+        }
+        TasksCommand::Type { id, lab_id } => {
+            let task_type = client.get_lab_task_type(id, lab_id.as_deref()).await?;
+            match format {
+                OutputFormat::Json => print_result(&task_type, format),
+                OutputFormat::Text => print_lab_task_type_detail(&task_type),
             }
         }
         TasksCommand::Create {
@@ -352,40 +379,6 @@ pub async fn run(
         TasksCommand::My { command } => run_my_tasks(&client, command, format).await?,
     }
 
-    Ok(())
-}
-
-fn task_type_query_is_global(
-    skip: u32,
-    limit: u32,
-    search: &Option<String>,
-    filters: &Option<String>,
-) -> bool {
-    search.as_deref().is_some_and(|value| !value.is_empty())
-        || filters.as_deref().is_some_and(|value| !value.is_empty())
-        || skip != 0
-        || limit != 100
-}
-
-fn validate_task_type_query_scope(command: &TasksCommand) -> anyhow::Result<()> {
-    let TasksCommand::Types {
-        skip,
-        limit,
-        search,
-        filters,
-        lab_id,
-    } = command
-    else {
-        return Ok(());
-    };
-    if task_type_query_is_global(*skip, *limit, search, filters) && lab_id.is_some() {
-        anyhow::bail!(
-            "`--lab-id` cannot be combined with task type search, filters, or pagination: \
-             the current backend only supports those options on the global catalog. \
-             Query the catalog first, then run `scitex tasks types --lab-id <LAB_ID>` \
-             to verify the selected type is available to that lab."
-        );
-    }
     Ok(())
 }
 
@@ -913,13 +906,11 @@ async fn resolve_is_compute_task(
     lab_id: Option<&str>,
 ) -> bool {
     if let Some(task_type_id) = task.task_type_id.as_deref() {
-        if let Ok(types) = client.list_lab_task_types(lab_id).await {
-            if let Some(task_type) = types.items.iter().find(|item| item.id == task_type_id) {
-                return is_compute_task_from_category_or_output(
-                    task,
-                    Some(task_type.category.as_str()),
-                );
-            }
+        if let Ok(task_type) = client.get_lab_task_type(task_type_id, lab_id).await {
+            return is_compute_task_from_category_or_output(
+                task,
+                Some(task_type.category.as_str()),
+            );
         }
     }
 
@@ -1083,7 +1074,8 @@ async fn build_workflow_part_views(
 
     let mut views = Vec::with_capacity(parts.len());
     for part in parts {
-        let category = resolve_part_category(client, &part, &mut task_type_categories).await?;
+        let category =
+            resolve_part_category(client, &part, &mut task_type_categories, lab_id).await?;
         let part_results = results_by_part.remove(part.id.as_str()).unwrap_or_default();
         let result_count = part_results.len();
         let assignment_count = assignment_count_by_part
@@ -1113,7 +1105,7 @@ async fn load_task_type_categories(
     lab_id: Option<&str>,
 ) -> HashMap<String, String> {
     client
-        .list_lab_task_types(lab_id)
+        .list_lab_task_types(0, 100, None, None, lab_id)
         .await
         .map(|types| {
             types
@@ -1129,18 +1121,22 @@ async fn resolve_part_category(
     client: &ScientexClient,
     part: &TaskPart,
     categories: &mut HashMap<String, String>,
+    lab_id: Option<&str>,
 ) -> anyhow::Result<String> {
     if let Some(task_type_id) = part.task_type_id.as_deref() {
         if let Some(category) = categories.get(task_type_id) {
             return Ok(category.clone());
         }
 
-        let task_type = client.get_task_type(task_type_id).await.with_context(|| {
-            format!(
-                "Failed to load task type `{task_type_id}` for workflow part `{}`",
-                part.id
-            )
-        })?;
+        let task_type = client
+            .get_lab_task_type(task_type_id, lab_id)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to load task type `{task_type_id}` for workflow part `{}`",
+                    part.id
+                )
+            })?;
         categories.insert(task_type.id.clone(), task_type.category.clone());
         return Ok(task_type.category);
     }
@@ -1346,7 +1342,7 @@ fn compute_output_lines(output_data: Option<&serde_json::Value>, status: &str) -
     lines
 }
 
-fn print_task_types(list: &crate::api_response::PaginatedList<TaskType>) {
+fn print_lab_task_types(list: &crate::api_response::PaginatedList<LabTaskTypeListItem>) {
     print_pagination_metadata(list);
     if list.items.is_empty() {
         println!("No task types");
@@ -1354,10 +1350,37 @@ fn print_task_types(list: &crate::api_response::PaginatedList<TaskType>) {
     }
     for item in &list.items {
         println!(
-            "{}  {:8}  {:7}  {}",
-            item.id, item.category, item.enabled, item.display_name
+            "{}  {:8}  fields={}/{} files={}  {}",
+            item.id,
+            item.category,
+            item.input_summary.required_field_count,
+            item.input_summary.field_count,
+            item.input_summary.file_field_count,
+            item.display_name
         );
     }
+}
+
+fn print_lab_task_type_detail(task_type: &LabTaskTypeDetail) {
+    println!(
+        "{}  {}  {}",
+        task_type.id, task_type.category, task_type.display_name
+    );
+    if let Some(description) = &task_type.description {
+        println!("  {description}");
+    }
+    println!(
+        "  inputs: {} total, {} required, {} file fields",
+        task_type.input_summary.field_count,
+        task_type.input_summary.required_field_count,
+        task_type.input_summary.file_field_count
+    );
+    println!(
+        "  documents: {} (SOP: {}, work order: {})",
+        task_type.documents.len(),
+        task_type.has_sop,
+        task_type.has_work_order
+    );
 }
 
 fn print_tasks(list: &crate::api_response::PaginatedList<TaskSummary>) {
@@ -1506,13 +1529,13 @@ mod tests {
                 skip,
                 limit,
                 search,
-                filters,
+                category,
                 lab_id,
             } => {
                 assert_eq!(skip, 10);
                 assert_eq!(limit, 25);
                 assert_eq!(search.as_deref(), Some("sample qc"));
-                assert_eq!(filters, None);
+                assert!(category.is_none());
                 assert!(lab_id.is_none());
             }
             _ => panic!("expected task types command"),
@@ -1520,42 +1543,45 @@ mod tests {
     }
 
     #[test]
-    fn parses_task_types_filters_option() {
+    fn parses_task_types_category_and_lab_options() {
         let args = parse_tasks(&[
             "tasks",
             "types",
             "--search",
             "ngs",
-            "--filters",
-            r#"[{"field":"category","operator":"eq","value":"compute"}]"#,
+            "--category",
+            "compute",
+            "--lab-id",
+            "lab-1",
         ]);
         match args.command {
             TasksCommand::Types {
                 skip,
                 limit,
                 search,
-                filters,
+                category,
                 lab_id,
             } => {
                 assert_eq!(skip, 0);
-                assert_eq!(limit, 100);
+                assert_eq!(limit, 20);
                 assert_eq!(search.as_deref(), Some("ngs"));
-                assert_eq!(
-                    filters.as_deref(),
-                    Some(r#"[{"field":"category","operator":"eq","value":"compute"}]"#)
-                );
-                assert!(lab_id.is_none());
+                assert!(matches!(category, Some(TaskTypeCategoryArg::Compute)));
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
             }
             _ => panic!("expected task types command"),
         }
     }
 
     #[test]
-    fn rejects_lab_id_with_global_task_type_query() {
-        let args = parse_tasks(&["tasks", "types", "--search", "tm", "--lab-id", "lab-1"]);
-        let error =
-            validate_task_type_query_scope(&args.command).expect_err("scope must be rejected");
-        assert!(error.to_string().contains("cannot be combined"));
+    fn parses_lab_task_type_detail_options() {
+        let args = parse_tasks(&["tasks", "type", "type-1", "--lab-id", "lab-1"]);
+        match args.command {
+            TasksCommand::Type { id, lab_id } => {
+                assert_eq!(id, "type-1");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+            }
+            _ => panic!("expected task type detail command"),
+        }
     }
 
     #[test]

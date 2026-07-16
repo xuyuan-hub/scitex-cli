@@ -527,6 +527,69 @@ pub struct TaskTypeDocument {
     pub scientex_link_url: Option<String>,
 }
 
+/// Lightweight, lab-visible task type fields used to select a task definition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LabTaskTypeListItem {
+    pub id: String,
+    pub key: String,
+    pub display_name: String,
+    pub category: String,
+    pub input_summary: TaskTypeInputSummary,
+    pub has_sop: bool,
+    pub has_work_order: bool,
+    pub is_assignable: bool,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+/// Token-efficient summary of a lab-visible task type's input fields.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskTypeInputSummary {
+    pub field_count: u64,
+    pub required_field_count: u64,
+    pub file_field_count: u64,
+}
+
+/// One enabled task definition, limited to fields a lab member needs to submit it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LabTaskTypeDetail {
+    pub id: String,
+    pub key: String,
+    pub display_name: String,
+    pub category: String,
+    pub input_summary: TaskTypeInputSummary,
+    pub has_sop: bool,
+    pub has_work_order: bool,
+    pub is_assignable: bool,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub input_schema: Option<serde_json::Value>,
+    #[serde(default)]
+    pub output_schema: Option<serde_json::Value>,
+    #[serde(default)]
+    pub documents: Vec<LabTaskTypeDocument>,
+}
+
+/// User-visible task-type document metadata; administrative links are omitted.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LabTaskTypeDocument {
+    pub id: String,
+    pub document_type: String,
+    pub filename: String,
+    pub content_type: String,
+    pub file_size: u64,
+    pub created_at: String,
+    #[serde(default)]
+    pub feishu_doc_url: Option<String>,
+    #[serde(default)]
+    pub feishu_sync_status: Option<String>,
+}
+
 /// Public view of the current user's Feishu (Lark) settings.
 /// Token fields (access_token / refresh_token) are never returned by GET.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1018,6 +1081,55 @@ mod tests {
             serde_json::from_str(json).expect("should ignore internal staff binding details");
         let value = serde_json::to_value(task_type).expect("should serialize task type");
         assert!(value.get("assigned_staff").is_none());
+    }
+
+    #[test]
+    fn lab_task_type_list_item_is_lightweight_and_detail_adds_submission_fields() {
+        let list_item: LabTaskTypeListItem = serde_json::from_value(serde_json::json!({
+            "id": "tt1",
+            "key": "tm_calculation",
+            "display_name": "Tm calculation",
+            "category": "COMPUTE",
+            "input_summary": {
+                "field_count": 2,
+                "required_field_count": 1,
+                "file_field_count": 0
+            },
+            "has_sop": true,
+            "has_work_order": false,
+            "is_assignable": false
+        }))
+        .expect("lab task type list item should parse");
+        assert_eq!(list_item.input_summary.required_field_count, 1);
+
+        let detail: LabTaskTypeDetail = serde_json::from_value(serde_json::json!({
+            "id": "tt1",
+            "key": "tm_calculation",
+            "display_name": "Tm calculation",
+            "category": "COMPUTE",
+            "input_summary": {
+                "field_count": 2,
+                "required_field_count": 1,
+                "file_field_count": 0
+            },
+            "has_sop": true,
+            "has_work_order": false,
+            "is_assignable": false,
+            "input_schema": {"type": "object"},
+            "output_schema": null,
+            "documents": [{
+                "id": "doc-1",
+                "document_type": "SOP",
+                "filename": "tm.md",
+                "content_type": "text/markdown",
+                "file_size": 1024,
+                "created_at": "2026-07-16T00:00:00Z"
+            }]
+        }))
+        .expect("lab task type detail should parse");
+        assert_eq!(detail.documents.len(), 1);
+        assert!(detail.input_schema.is_some());
+        assert!(detail.output_schema.is_none());
     }
 
     #[test]

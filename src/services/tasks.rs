@@ -5,8 +5,8 @@ use crate::client::ScientexClient;
 use crate::errors::ScientexError;
 use crate::services::{empty_body, path_segment_encode, url_encode};
 use crate::types::{
-    StaffAssignmentDetail, StaffAssignmentItem, Task, TaskDocument, TaskResult, TaskSummary,
-    TaskType, WorkflowDetail,
+    LabTaskTypeDetail, LabTaskTypeListItem, StaffAssignmentDetail, StaffAssignmentItem, Task,
+    TaskDocument, TaskResult, TaskSummary, TaskType, WorkflowDetail,
 };
 
 impl ScientexClient {
@@ -24,9 +24,13 @@ impl ScientexClient {
 
     pub async fn list_lab_task_types(
         &self,
+        skip: u32,
+        limit: u32,
+        search: Option<&str>,
+        category: Option<&str>,
         lab_id: Option<&str>,
-    ) -> Result<PaginatedList<TaskType>, ScientexError> {
-        let path = lab_task_types_path();
+    ) -> Result<PaginatedList<LabTaskTypeListItem>, ScientexError> {
+        let path = lab_task_types_path(skip, limit, search, category);
         let resp: serde_json::Value = if let Some(lab_id) = lab_id {
             self.http
                 .get_with_headers(&path, &[("X-Current-Lab", lab_id)])
@@ -35,6 +39,22 @@ impl ScientexClient {
             self.http.get(&path).await?
         };
         extract_paginated(resp)
+    }
+
+    pub async fn get_lab_task_type(
+        &self,
+        task_type_id: &str,
+        lab_id: Option<&str>,
+    ) -> Result<LabTaskTypeDetail, ScientexError> {
+        let path = lab_task_type_path(task_type_id);
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .get_with_headers(&path, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.get(&path).await?
+        };
+        extract_object(resp)
     }
 
     pub async fn list_lab_tasks(
@@ -414,8 +434,29 @@ fn task_types_path(skip: u32, limit: u32, search: Option<&str>, filters: Option<
     path
 }
 
-fn lab_task_types_path() -> String {
-    "/lab/tasks/task-types".to_string()
+fn lab_task_types_path(
+    skip: u32,
+    limit: u32,
+    search: Option<&str>,
+    category: Option<&str>,
+) -> String {
+    let mut path = format!("/lab/tasks/task-types?skip={skip}&limit={limit}");
+    if let Some(search) = search.filter(|value| !value.is_empty()) {
+        path.push_str("&search=");
+        path.push_str(&url_encode(search));
+    }
+    if let Some(category) = category.filter(|value| !value.is_empty()) {
+        path.push_str("&category=");
+        path.push_str(&url_encode(category));
+    }
+    path
+}
+
+fn lab_task_type_path(task_type_id: &str) -> String {
+    format!(
+        "/lab/tasks/task-types/{}",
+        path_segment_encode(task_type_id)
+    )
 }
 
 fn lab_tasks_path(skip: u32, limit: u32) -> String {
@@ -521,7 +562,18 @@ mod tests {
 
     #[test]
     fn builds_lab_task_paths() {
-        assert_eq!(lab_task_types_path(), "/lab/tasks/task-types");
+        assert_eq!(
+            lab_task_types_path(0, 20, None, None),
+            "/lab/tasks/task-types?skip=0&limit=20"
+        );
+        assert_eq!(
+            lab_task_types_path(10, 50, Some("sample qc"), Some("COMPUTE")),
+            "/lab/tasks/task-types?skip=10&limit=50&search=sample+qc&category=COMPUTE"
+        );
+        assert_eq!(
+            lab_task_type_path("type /1"),
+            "/lab/tasks/task-types/type%20%2F1"
+        );
         assert_eq!(lab_tasks_path(10, 25), "/lab/tasks?skip=10&limit=25");
         assert_eq!(lab_tasks_create_path(), "/lab/tasks");
         assert_eq!(lab_task_path("task 1"), "/lab/tasks/task%201");

@@ -146,7 +146,7 @@ If `required` is present, every required field should exist in `properties`.
 
 ## Workflow
 
-1. Search `scitex tasks types --search <key-or-name> -f json` before creating; treat matches as catalog candidates and avoid duplicate keys.
+1. A normal `scitex tasks types` query is lab-scoped and cannot prove platform-catalog uniqueness. Choose a stable key, let the backend enforce global uniqueness, and report a duplicate-key conflict rather than treating a lab search as authoritative.
 2. Translate the user's task-type idea into a clear `TaskTypeCreate` JSON payload.
 2. Prefer stable lowercase snake_case keys for `key` and schema property names.
 3. Include only fields supported by the OpenAPI schema.

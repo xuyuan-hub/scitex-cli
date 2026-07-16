@@ -139,7 +139,7 @@ After running `scitex skills install`, the Agent gains access to the following s
 | `scitex-lab` | Lab info, members, roles, invitations, applications, approval rules |
 | `scitex-project` | Project slug lookup and delegation to project-specific skills |
 | `scitex-tashan` | Tashan (他山) project workflows: germplasm records, sequencing files, seed intake, planting orders/items, harvest records |
-| `scitex-task` | Natural-language task/workflow creation: check task types, then create single-stage or multi-stage tasks |
+| `scitex-task` | Natural-language task/workflow creation: search lab task-type summaries, read selected details, then create single-stage or multi-stage tasks |
 | `scitex-evo` | Molecular design compute tasks: Tm calculation, codon optimization, NGS primer design/verification, Golden Gate assembly |
 | `scitex-users` | Login status, authenticated profile, contact fields, password changes |
 | `scitex-error-report` | Categorize and submit a client error report when the CLI misbehaves |
@@ -441,7 +441,7 @@ scitex skills install --global
 | `scitex-lab` | 课题组信息、成员、角色、邀请、入组申请、审批规则 |
 | `scitex-project` | 按项目 slug 定位并转发到具体项目 skill |
 | `scitex-tashan` | 他山项目工作流：种质记录、测序文件、种子入库、种植单/种植项、收获记录 |
-| `scitex-task` | 自然语言创建任务/工作流：先查任务类型，再创建单阶段或多阶段任务 |
+| `scitex-task` | 自然语言创建任务/工作流：先搜索课题组任务类型摘要、读取选中详情，再创建单阶段或多阶段任务 |
 | `scitex-evo` | 分子设计计算任务：Tm 计算、密码子优化、NGS 引物设计/验证、Golden Gate 拼接 |
 | `scitex-users` | 登录状态、当前用户资料、联系人字段、密码修改 |
 | `scitex-error-report` | CLI 出现问题时，分类并提交客户端错误报告 |
