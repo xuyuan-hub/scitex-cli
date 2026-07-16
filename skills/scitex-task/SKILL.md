@@ -24,6 +24,12 @@ Do not use this skill for generic coding requests unless the user clearly means 
 
 Before API calls, read `../scitex-shared/SKILL.md`.
 
+## Task View Boundary
+
+This skill defaults to the **Lab tasks** view. Create, list, get, documents, upload-field, results, confirm, and reject commands operate through `/lab/tasks` and are scoped to the current lab or explicit `--lab-id`.
+
+Do not use `scitex tasks workflow`, `tasks update`, or `tasks update-file` for a normal lab member: those are the platform administrator's global `/tasks` view. Use `scitex tasks my ...` only when the authenticated staff member needs their own assigned task stages; it is neither a lab list nor a creator-filtered list.
+
 ## Core Rule
 
 Never assume the task type exists. Distinguish catalog discovery from lab availability:
@@ -257,20 +263,14 @@ For clearly requested, low-risk task creation with all inputs present, proceed a
 
 ## Inspecting Workflow Tasks
 
-Use:
+For a normal lab member, use:
 
 ```bash
-scitex tasks workflow <TASK_ID> -f json
+scitex tasks get <TASK_ID> -f json
+scitex tasks results <TASK_ID> -f json
 ```
 
-This is the preferred detail view for multi-stage tasks because it includes:
-
-- root task metadata
-- stage list
-- dependencies
-- assignments
-
-Do not rely on `scitex tasks get` alone when the user wants workflow structure.
+The backend currently exposes no lab-scoped workflow-detail endpoint. Exact stage graph, dependencies, and assignments are available only through `scitex tasks workflow <TASK_ID> -f json`, the global platform-admin view. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
 
 ## Reading Results
 
@@ -291,7 +291,7 @@ For workflow tasks, results are stage-aware:
 - compute stages read from `part.output_data`
 - staff stages read from submitted results linked by `part_id`
 
-If the user asks why a workflow task appears empty, inspect both the workflow structure and the stage result shape before assuming a backend bug.
+If the user asks why a workflow task appears empty, inspect the lab-visible task and results first. Escalate to a platform administrator only when global workflow structure is required and the user has that authority.
 
 ## Examples
 

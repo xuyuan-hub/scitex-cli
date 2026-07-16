@@ -98,13 +98,14 @@ Example: compute primer Tm, then unlock NGS primer design:
 }
 ```
 
-After creation, inspect progression with:
+After creation, a lab member inspects progression with:
 
 ```bash
-scitex tasks workflow <task_id> -f json
+scitex tasks get <task_id> -f json
+scitex tasks results <task_id> -f json
 ```
 
-Expected compute workflow progression: dependent stages may start as `LOCKED`, become `READY` after prerequisites complete, then run automatically. Report per-stage status and `output_data.exit_code`; the root workflow status may lag behind completed compute stages.
+The exact workflow graph and assignment state are only available through `scitex tasks workflow`, a platform-admin global view. For lab users, report only lab-visible task status and results; do not infer hidden stage state from a permission failure.
 
 ## File Inputs
 

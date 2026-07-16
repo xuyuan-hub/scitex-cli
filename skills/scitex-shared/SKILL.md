@@ -61,6 +61,17 @@ Do not invent CLI commands for backend endpoints that `scitex <domain> --help` d
 - Use `scitex <domain> --help` before guessing flags.
 - Prefer an exact `get` by ID, a documented server-side search/filter, or a status-scoped list. Use an unfiltered list only when the API has no narrower query or the user asks to browse the full set.
 - Confirm before write operations that mutate lab state, orders, templates, inventory, or profile data.
+
+## Task Views
+
+Do not treat all task endpoints as the same view:
+
+- **Lab tasks** (`scitex tasks create/list/get/results/...`) use `/lab/tasks`; they are the normal member view, scoped to the current lab or an explicit `--lab-id`.
+- **Platform tasks** (`scitex tasks workflow`, `scitex tasks update`, `scitex tasks update-file`) use `/tasks`; they are cross-lab administrator operations and require `platform_admin` or superuser permission.
+- **My Tasks** (`scitex tasks my ...`) use `/staff/tasks`; they show only task stages assigned to the current staff member, not tasks created by them or all tasks in their lab.
+
+The same task can appear in all three views. Route by the user's role and intent, and never use an administrator endpoint as a fallback for a lab member.
+
 - Use the domain skill matching the task:
   - Orders: `../scitex-orders/SKILL.md`
   - Templates: `../scitex-templates/SKILL.md`

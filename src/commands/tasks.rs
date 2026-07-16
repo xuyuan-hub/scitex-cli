@@ -43,7 +43,7 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
-    /// Create a task from a JSON file.
+    /// Create a task in the current lab from a JSON file.
     Create {
         file: String,
         /// Attach input files as field=path entries for multipart task creation.
@@ -52,7 +52,7 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
-    /// Create a workflow task from a JSON file.
+    /// Create a workflow task in the current lab from a JSON file.
     CreateWorkflow {
         file: String,
         #[arg(long)]
@@ -73,11 +73,11 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
-    /// Show workflow detail for a task.
+    /// Show global workflow detail for a task (platform_admin or superuser only).
     Workflow { id: String },
-    /// Update a task from an inline JSON object.
+    /// Update a task globally (platform_admin or superuser only).
     Update { id: String, data: String },
-    /// Update a task from a JSON file.
+    /// Update a task globally from a JSON file (platform_admin or superuser only).
     UpdateFile { id: String, file: String },
     /// List lab-visible task documents.
     Documents {
@@ -127,7 +127,7 @@ pub enum TasksCommand {
         #[arg(long)]
         lab_id: Option<String>,
     },
-    /// My assigned staff tasks.
+    /// My assigned task stages (staff view; not a lab task list).
     My {
         #[command(subcommand)]
         command: MyTasksCommand,
@@ -136,21 +136,21 @@ pub enum TasksCommand {
 
 #[derive(Subcommand)]
 pub enum MyTasksCommand {
-    /// List assignments assigned to me.
+    /// List task stages assigned to me.
     List {
         #[arg(short, long, default_value_t = 0)]
         skip: u32,
         #[arg(short, long, default_value_t = 100)]
         limit: u32,
     },
-    /// Show one assignment assigned to me.
+    /// Show one task stage assigned to me.
     Get { assignment_id: String },
-    /// Update my assignment status.
+    /// Update the status of my assigned task stage.
     Status {
         assignment_id: String,
         status: AssignmentStatusArg,
     },
-    /// Submit a result for my assignment from a JSON file.
+    /// Submit a result for my assigned task stage from a JSON file.
     SubmitResult {
         assignment_id: String,
         file: String,
@@ -897,7 +897,12 @@ async fn get_task_workflow_if_available(
 ) -> anyhow::Result<Option<WorkflowDetail>> {
     match client.get_task_workflow(task_id).await {
         Ok(workflow) => Ok(Some(workflow)),
-        Err(ScientexError::HttpError { status: 404, .. }) => Ok(None),
+        // Lab members can see task results through /lab/tasks but do not have access to
+        // the global /tasks/{id}/workflow administrator view. Fall back to lab results.
+        Err(ScientexError::HttpError {
+            status: 401 | 403 | 404,
+            ..
+        }) => Ok(None),
         Err(err) => Err(err.into()),
     }
 }
