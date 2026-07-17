@@ -175,16 +175,20 @@ pub enum MyTasksCommand {
     /// Submit a result for my assigned task stage from a JSON file.
     SubmitResult {
         assignment_id: String,
+        /// JSON output object for the assigned stage. It is sent as `output_data`.
+        #[arg(value_name = "OUTPUT_JSON")]
         file: String,
-        /// Optional JSON file with document_feedback (SOP/work_order feedback).
+        /// Optional JSON file sent as top-level document_feedback (SOP/work_order feedback).
         #[arg(long, value_name = "FILE")]
         feedback: Option<String>,
     },
     /// Atomically submit a result, complete the assignment, and unlock downstream stages.
     Complete {
         assignment_id: String,
+        /// JSON output object for the assigned stage. It is sent as `output_data`.
+        #[arg(value_name = "OUTPUT_JSON")]
         file: String,
-        /// Optional JSON file with document_feedback (SOP/work_order feedback).
+        /// Optional JSON file sent as top-level document_feedback (SOP/work_order feedback).
         #[arg(long, value_name = "FILE")]
         feedback: Option<String>,
     },
@@ -538,16 +542,45 @@ fn read_result_payload(
     path: &str,
     feedback_path: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
-    let mut data = read_json_file(path)?;
-    if let Some(feedback_path) = feedback_path {
-        let feedback_data = read_json_file(feedback_path)?;
-        if let Some(obj) = data.as_object_mut() {
-            obj.insert("document_feedback".to_string(), feedback_data);
-        } else {
-            anyhow::bail!("Result JSON file must contain a JSON object");
-        }
+    let data = read_json_file(path)?;
+    let feedback_data = feedback_path.map(read_json_file).transpose()?;
+    normalize_result_payload(data, feedback_data)
+}
+
+/// Normalize a result file into the backend's `TaskResultCreate` request body.
+///
+/// A bare output object is the ergonomic default. Existing full request envelopes
+/// remain accepted for compatibility; an empty object is also kept as an empty
+/// request envelope rather than silently changing its semantics.
+fn normalize_result_payload(
+    data: serde_json::Value,
+    feedback_data: Option<serde_json::Value>,
+) -> anyhow::Result<serde_json::Value> {
+    let is_existing_envelope = data.as_object().is_some_and(|object| {
+        object.is_empty()
+            || object.keys().any(|key| {
+                matches!(
+                    key.as_str(),
+                    "output_data" | "comment" | "document_feedback"
+                )
+            })
+    });
+
+    let mut payload = if is_existing_envelope {
+        data
+    } else if data.is_object() || data.is_null() {
+        serde_json::json!({ "output_data": data })
+    } else {
+        anyhow::bail!("Result JSON file must contain a JSON object or null");
+    };
+
+    if let Some(feedback_data) = feedback_data {
+        payload
+            .as_object_mut()
+            .expect("result payload is always a JSON object")
+            .insert("document_feedback".to_string(), feedback_data);
     }
-    Ok(data)
+    Ok(payload)
 }
 
 fn print_task_documents_text(docs: &[TaskDocument]) {
@@ -1859,6 +1892,63 @@ mod tests {
                 assert!(feedback.is_none());
             }
             _ => panic!("expected submit result command"),
+        }
+    }
+
+    #[test]
+    fn wraps_bare_result_output_in_task_result_create() {
+        let payload = normalize_result_payload(json!({ "required_output": "ready" }), None)
+            .expect("bare output object should be wrapped");
+
+        assert_eq!(
+            payload,
+            json!({ "output_data": { "required_output": "ready" } })
+        );
+    }
+
+    #[test]
+    fn preserves_existing_task_result_request_envelope() {
+        let envelope = json!({
+            "output_data": { "required_output": "ready" },
+            "comment": "finished"
+        });
+        assert_eq!(
+            normalize_result_payload(envelope.clone(), None)
+                .expect("existing request envelope should remain valid"),
+            envelope
+        );
+
+        let empty_envelope = json!({});
+        assert_eq!(
+            normalize_result_payload(empty_envelope.clone(), None)
+                .expect("empty request envelope should remain valid"),
+            empty_envelope
+        );
+    }
+
+    #[test]
+    fn wraps_null_result_and_keeps_feedback_at_request_root() {
+        let payload = normalize_result_payload(
+            serde_json::Value::Null,
+            Some(json!({ "sop": "needs clarification" })),
+        )
+        .expect("null output data is allowed by TaskResultCreate");
+
+        assert_eq!(payload["output_data"], serde_json::Value::Null);
+        assert_eq!(
+            payload["document_feedback"],
+            json!({ "sop": "needs clarification" })
+        );
+    }
+
+    #[test]
+    fn rejects_non_object_non_null_result_data() {
+        for invalid in [json!(["not an output object"]), json!(42), json!("done")] {
+            let error = normalize_result_payload(invalid, None)
+                .expect_err("arrays and scalar result data violate TaskResultCreate");
+            assert!(error
+                .to_string()
+                .contains("must contain a JSON object or null"));
         }
     }
 

@@ -117,7 +117,7 @@ pub enum ErrorCategoryFilterArg {
 impl ErrorCategoryFilterArg {
     fn as_str(&self) -> &'static str {
         match self {
-            Self::UiDisplay => "ui-display",
+            Self::UiDisplay => "ui_display",
             Self::Functional => "functional",
             Self::Data => "data",
             Self::Performance => "performance",
@@ -1259,6 +1259,22 @@ mod tests {
                 command: AdminErrorReportsCommand::List { .. }
             }
         ));
+    }
+
+    #[test]
+    fn error_report_category_filters_use_api_enum_values() {
+        let cases = [
+            (ErrorCategoryFilterArg::UiDisplay, "ui_display"),
+            (ErrorCategoryFilterArg::Functional, "functional"),
+            (ErrorCategoryFilterArg::Data, "data"),
+            (ErrorCategoryFilterArg::Performance, "performance"),
+            (ErrorCategoryFilterArg::Permission, "permission"),
+            (ErrorCategoryFilterArg::Other, "other"),
+        ];
+
+        for (category, expected) in cases {
+            assert_eq!(category.as_str(), expected);
+        }
     }
 
     #[test]

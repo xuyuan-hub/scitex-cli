@@ -16,7 +16,7 @@ struct ErrorHistoryData {
 }
 
 pub struct ErrorHistory {
-    path: PathBuf,
+    path: Option<PathBuf>,
     data: ErrorHistoryData,
 }
 
@@ -31,7 +31,18 @@ impl ErrorHistory {
         } else {
             ErrorHistoryData::default()
         };
-        Self { path, data }
+        Self {
+            path: Some(path),
+            data,
+        }
+    }
+
+    #[cfg(test)]
+    fn for_test() -> Self {
+        Self {
+            path: None,
+            data: ErrorHistoryData::default(),
+        }
     }
 
     pub fn record(
@@ -73,11 +84,14 @@ impl ErrorHistory {
     }
 
     fn save(&self) {
-        if let Some(parent) = self.path.parent() {
+        let Some(path) = &self.path else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
         if let Ok(json) = serde_json::to_string(&self.data) {
-            let _ = std::fs::write(&self.path, json);
+            let _ = std::fs::write(path, json);
         }
     }
 }
@@ -199,7 +213,7 @@ mod tests {
 
     #[test]
     fn records_and_detects_threshold() {
-        let mut history = ErrorHistory::load();
+        let mut history = ErrorHistory::for_test();
         let fp = "orders::create::HttpError(422)";
         // Record 3 entries with the same fingerprint
         history.record(fp, "orders create", "HttpError", "validation failed");
@@ -211,7 +225,7 @@ mod tests {
 
     #[test]
     fn threshold_not_reached_with_insufficient_entries() {
-        let mut history = ErrorHistory::load();
+        let mut history = ErrorHistory::for_test();
         let fp = "inventory::get::ParseError";
         history.record(fp, "inventory get", "ParseError", "bad json");
         history.record(fp, "inventory get", "ParseError", "bad json");
@@ -220,7 +234,7 @@ mod tests {
 
     #[test]
     fn different_fingerprints_dont_combine() {
-        let mut history = ErrorHistory::load();
+        let mut history = ErrorHistory::for_test();
         history.record("a::b", "cmd1", "E1", "msg");
         history.record("a::b", "cmd1", "E1", "msg");
         history.record("x::y", "cmd2", "E2", "msg");
@@ -229,7 +243,7 @@ mod tests {
 
     #[test]
     fn fifo_truncates_at_50() {
-        let mut history = ErrorHistory::load();
+        let mut history = ErrorHistory::for_test();
         for i in 0..60 {
             history.record(&format!("fp_{i}"), "cmd", "E", "msg");
         }
@@ -238,5 +252,13 @@ mod tests {
         let first = &history.data.entries[0];
         assert_eq!(first.fingerprint, "fp_10");
         assert_eq!(history.data.entries.len(), 50);
+    }
+
+    #[test]
+    fn test_history_is_in_memory() {
+        let mut history = ErrorHistory::for_test();
+        history.record("fp", "cmd", "Error", "message");
+
+        assert!(history.path.is_none());
     }
 }

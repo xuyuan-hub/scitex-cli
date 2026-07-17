@@ -291,10 +291,28 @@ Use the staff view only for stages assigned to the authenticated employee:
 scitex tasks my list --search <keyword> --exclude-status completed -f json
 scitex tasks my get <ASSIGNMENT_ID> -f json
 scitex tasks my upload-field <TASK_ID> <FILE> <FIELD_KEY> --visibility lab-and-staff -f json
+scitex tasks my submit-result <ASSIGNMENT_ID> result.json [--feedback feedback.json] -f json
 scitex tasks my complete <ASSIGNMENT_ID> result.json [--feedback feedback.json] -f json
 ```
 
 Prefer `tasks my complete` for normal completion because it atomically submits the result, completes the assignment, and unlocks downstream stages. Use `submit-result` or `status` separately only when the user explicitly needs a partial or staged action. Writable assignment statuses are `pending`, `in-progress`, and `completed`; `BLOCKED` is a task-part status, not an assignment status.
+
+`result.json` should normally contain the output object defined by the assigned stage's
+`output_schema`, for example:
+
+```json
+{
+  "checked_samples": 12,
+  "passed": true
+}
+```
+
+The CLI sends this as `{ "output_data": <result.json contents> }`. A complete
+`TaskResultCreate` request object is also accepted for compatibility. If the raw output
+schema itself has a top-level `output_data`, `comment`, or `document_feedback` field, use
+the explicit request form `{ "output_data": { ... } }` to avoid that ambiguity.
+`--feedback` always writes the feedback file at the request's top-level
+`document_feedback` field.
 
 ## Reading Results
 

@@ -542,6 +542,7 @@ fn command_closure_endpoints_exist_with_methods() {
         ("GET", "/admin/error-reports/"),
         ("GET", "/admin/error-reports/{id}"),
         ("GET", "/lab/tasks/{id}/parts/{id}"),
+        ("POST", "/staff/tasks/assignments/{id}/results"),
         ("POST", "/staff/tasks/assignments/{id}/complete"),
         ("POST", "/staff/tasks/{id}/upload-field"),
         ("GET", "/task-types"),
@@ -563,6 +564,26 @@ fn command_closure_endpoints_exist_with_methods() {
         ("GET", "/tasks/{id}/results"),
     ];
     assert_operations_exist(&doc, &expected);
+}
+
+#[test]
+fn staff_result_commands_use_task_result_create_request_body() {
+    let doc = load_openapi();
+    for path in [
+        "~1api~1v1~1staff~1tasks~1assignments~1{assignment_id}~1results",
+        "~1api~1v1~1staff~1tasks~1assignments~1{assignment_id}~1complete",
+    ] {
+        let schema_ref = doc
+            .pointer(&format!(
+                "/paths/{path}/post/requestBody/content/application~1json/schema/$ref"
+            ))
+            .and_then(|value| value.as_str());
+        assert_eq!(
+            schema_ref,
+            Some("#/components/schemas/TaskResultCreate"),
+            "staff result endpoint `{path}` must retain the TaskResultCreate request body"
+        );
+    }
 }
 
 #[test]
