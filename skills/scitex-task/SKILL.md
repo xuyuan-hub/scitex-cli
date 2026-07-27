@@ -1,6 +1,6 @@
 ---
 name: scitex-task
-description: "Use when the user asks to create, arrange, inspect, or execute a task in the Scientex lab task scheduling system. First resolve a live task type, then create either a single-stage task or a multi-stage workflow task once the required inputs are clear."
+description: "Use when the user asks to create, arrange, inspect, or execute a task in the Scientex lab task scheduling system. First resolve a live task type, then create either a single-stage task or a multi-stage workflow task, including per-stage scheduled release, once the required inputs are clear."
 metadata:
   requires:
     bins: ["scitex"]
@@ -174,6 +174,11 @@ The JSON payload should follow the workflow task shape:
         "<required_field>": "<value>"
       },
       "assignee_ids": ["<user_id>"],
+      "release_schedule": {
+        "mode": "at_time",
+        "not_before_at": "<RFC 3339 date-time with UTC offset>",
+        "timezone": "Asia/Shanghai"
+      },
       "sort_order": 20
     }
   ],
@@ -197,12 +202,32 @@ Important rules:
 - put staff assignees on the relevant stage with `assignee_ids`
 - task type required fields go into `parts[].input_data`, not the root `input_data` — same rule as single-stage tasks
 
+### Scheduled release for a workflow stage
+
+Set a stage's optional `release_schedule` only inside that stage's `parts[]` object; do not put it at the workflow root. Omit it for the normal immediate-release behavior.
+
+For an absolute scheduled release, use:
+
+```json
+"release_schedule": {
+  "mode": "at_time",
+  "not_before_at": "<RFC 3339 date-time with UTC offset>",
+  "timezone": "Asia/Shanghai"
+}
+```
+
+- `mode` must be `"at_time"` for a scheduled release. The only other supported value is `"immediate"`.
+- `not_before_at` is the absolute earliest release time and must be an OpenAPI `date-time` value. Collect a full date, time, and UTC offset; never guess an ambiguous local time.
+- `timezone` is optional, but when supplied it must be an IANA timezone name such as `Asia/Shanghai`.
+- A scheduled release may be used on the first stage, or as an additional earliest-release boundary on a stage that already has dependencies. Dependencies still belong in `dependencies`; do not replace them with a time schedule.
+- Do not use `release_schedule` to describe a relative delay after an upstream stage completes. That is a completed-dependency rule, not an absolute release time.
+
 ## Workflow Status Semantics
 
 When inspecting a workflow, interpret stage status as:
 
-- `LOCKED`: the stage is waiting for dependency conditions
-- `READY`: dependency conditions are satisfied and the stage is eligible to run
+- `LOCKED`: the stage is waiting for dependency conditions and/or its scheduled release time
+- `READY`: dependency conditions and any scheduled release boundary are satisfied, so the stage is eligible to run
 - `IN_PROGRESS`: the stage is running
 - `COMPLETED`: the stage finished successfully
 - `BLOCKED`: the stage cannot proceed (e.g. upstream failure)
@@ -267,8 +292,9 @@ For workflow tasks include:
 - each stage's key input data
 - dependencies
 - assignees, if any
+- scheduled release time and timezone for every stage using `release_schedule`
 
-Ask for confirmation if the task would start external work, notify staff, spend resources, or if the request is ambiguous.
+For a scheduled release, confirm the exact stage, release time, and timezone before creating the task. Ask for confirmation if the task would start external work, notify staff, spend resources, or if the request is ambiguous.
 
 For clearly requested, low-risk task creation with all inputs present, proceed after the preview according to the user's intent.
 
