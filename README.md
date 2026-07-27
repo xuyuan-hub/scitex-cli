@@ -105,7 +105,7 @@ If not logged in, proceed to Step 2.
 
 **Step 2 — Login**
 
-> Run `scitex login`. It outputs an auth URL, starts a background poller, and returns immediately. Send the URL to the user to open in their browser. After the user authorizes, the background poller saves the token.
+> Run `scitex login`. It outputs an auth URL and keeps polling in the foreground. Send the URL to the user, keep the command running while they authorize, and wait for the command to confirm that the token was saved.
 
 ```bash
 scitex login
@@ -179,7 +179,7 @@ Recommended cross-repository release order:
 # Interactive login
 scitex login
 
-# Agent-friendly login: print auth URL and continue polling in background
+# Agent-friendly login: keep this command running until browser authorization completes
 scitex login
 
 # Check status
@@ -407,7 +407,7 @@ scitex status
 
 **第二步 —— 登录**
 
-> 运行 `scitex login`，会打印一个认证 URL、启动后台轮询进程并立即返回。将 URL 发给用户在浏览器中打开，授权后后台进程会自动保存 token。无论本地或远程终端均可正常工作。
+> 运行 `scitex login`，会打印一个认证 URL 并在前台持续轮询。将 URL 发给用户在浏览器中打开，保持命令运行，直到它提示 token 已保存。
 
 ```bash
 scitex login
@@ -487,7 +487,7 @@ Client 侧规则：
 # 交互式登录
 scitex login
 
-# Agent 友好登录：打印认证 URL 后在后台等待用户授权
+# Agent 友好登录：打印认证 URL 后保持命令运行，等待用户授权完成
 scitex login
 
 # 检查状态

@@ -281,6 +281,8 @@ scitex tasks get <TASK_ID> -f json
 scitex tasks results <TASK_ID> -f json
 ```
 
+`tasks get` includes each visible part's user-facing task-type input requirements under `input_requirements`. Inspect those requirements before uploading or replacing a task input file; for a seed manifest import they include the accepted Excel format, table headers, and example rows.
+
 Use `scitex tasks part <TASK_ID> <PART_ID> -f json` when the lab-visible part ID is already known. The backend exposes no lab-scoped full workflow-detail endpoint. Exact stage graph, dependencies, and assignments are available only through `scitex admin tasks workflow <TASK_ID> -f json`, the global platform-admin view. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
 
 ## Staff Assignment Completion

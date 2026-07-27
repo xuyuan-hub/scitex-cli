@@ -12,7 +12,7 @@ pub mod services;
 /// Scientex API client library.
 pub mod types;
 
-pub use auth::{check_status, login, logout, poll_login_from_env};
+pub use auth::{check_status, login, logout};
 pub use client::ScientexClient;
 pub use config::Config;
 pub use errors::ScientexError;

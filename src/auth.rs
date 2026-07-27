@@ -1,14 +1,9 @@
-use std::{
-    process::{Command, Stdio},
-    time::Duration,
-};
+use std::time::Duration;
 
 use reqwest::Client;
 use serde::Deserialize;
 
 use crate::config::Config;
-
-const LOGIN_POLL_KEY_ENV_VAR: &str = "SCIENTEX_LOGIN_POLL_KEY";
 
 /// Response from POST /feishu/cli-auth.
 #[derive(Deserialize)]
@@ -77,41 +72,26 @@ pub async fn login(config: &Config) -> bool {
             println!("  请在浏览器中打开以下链接完成飞书认证：");
             println!("\n    {}\n", resp.auth_url);
 
-            println!("  已启动后台登录轮询，Agent 可先返回认证链接。");
-            println!("  用户授权后 token 会自动保存；稍后运行 `scitex status` 检查结果。");
+            println!("  正在前台等待授权完成；请保持此命令运行。");
+            println!("  用户授权后 token 会自动保存。");
             println!("{}\n", "=".repeat(55));
 
-            if let Err(e) = spawn_login_poller(&resp.poll_key) {
-                eprintln!("启动后台登录轮询失败: {e}");
-                return false;
+            match poll_and_save_token(&client, config, &resp.poll_key).await {
+                Ok(()) => {
+                    println!("\n认证成功，token 已保存。");
+                    true
+                }
+                Err(e) => {
+                    eprintln!("\n认证失败: {e}");
+                    false
+                }
             }
-
-            true
         }
         Err(e) => {
             eprintln!("请求认证失败: {e}");
             false
         }
     }
-}
-
-pub async fn poll_login_from_env(config: &Config) -> bool {
-    let Ok(poll_key) = std::env::var(LOGIN_POLL_KEY_ENV_VAR) else {
-        eprintln!("缺少后台登录 poll key。");
-        return false;
-    };
-
-    let client = Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .expect("failed to build HTTP client");
-
-    if let Err(e) = poll_and_save_token(&client, config, &poll_key).await {
-        eprintln!("后台登录失败: {e}");
-        return false;
-    }
-
-    true
 }
 
 /// Request an auth URL and poll key from the backend.
@@ -171,23 +151,16 @@ async fn poll_jwt(
             .body(serde_json::json!({ "poll_key": poll_key }).to_string())
             .send()
             .await?;
-
+        let status = resp.status();
         let body: serde_json::Value = resp.json().await?;
 
-        // Success: token received
-        if body.get("status").and_then(|v| v.as_str()) == Some("success") {
-            if let Some(token) = body.get("access_token").and_then(|v| v.as_str()) {
-                return Ok(token.to_string());
-            }
+        if !status.is_success() {
+            return Err(format!("轮询 token 失败: HTTP {status}: {body}").into());
         }
 
-        // Error: backend returned a failure
-        if body.get("status").and_then(|v| v.as_str()) == Some("error") {
-            let detail = body
-                .get("detail")
-                .and_then(|v| v.as_str())
-                .unwrap_or("未知错误");
-            return Err(format!("后端返回错误: {detail}").into());
+        match token_from_poll_response(&body)? {
+            Some(token) => return Ok(token),
+            None => {}
         }
 
         // Still waiting — keep polling
@@ -198,16 +171,25 @@ async fn poll_jwt(
     }
 }
 
-fn spawn_login_poller(poll_key: &str) -> std::io::Result<()> {
-    let exe = std::env::current_exe()?;
-    Command::new(exe)
-        .arg("login-poll")
-        .env(LOGIN_POLL_KEY_ENV_VAR, poll_key)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-    Ok(())
+fn token_from_poll_response(body: &serde_json::Value) -> Result<Option<String>, String> {
+    match body.get("status").and_then(|value| value.as_str()) {
+        Some("waiting") => Ok(None),
+        Some("success") => body
+            .get("access_token")
+            .and_then(|value| value.as_str())
+            .filter(|token| !token.is_empty())
+            .map(|token| Some(token.to_string()))
+            .ok_or_else(|| "后端返回 success 但没有 access_token".to_string()),
+        Some("error") => {
+            let detail = body
+                .get("detail")
+                .and_then(|value| value.as_str())
+                .unwrap_or("未知错误");
+            Err(format!("后端返回错误: {detail}"))
+        }
+        Some(status) => Err(format!("后端返回未知认证状态: {status}")),
+        None => Err("后端响应缺少认证状态".to_string()),
+    }
 }
 
 pub fn logout(config: &Config) {
@@ -215,5 +197,44 @@ pub fn logout(config: &Config) {
         println!("已登出，Token 已删除。");
     } else {
         println!("未登录。");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::token_from_poll_response;
+
+    #[test]
+    fn poll_response_waiting_has_no_token() {
+        assert_eq!(
+            token_from_poll_response(&json!({ "status": "waiting" })),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn poll_response_success_returns_token() {
+        assert_eq!(
+            token_from_poll_response(&json!({ "status": "success", "access_token": "jwt" })),
+            Ok(Some("jwt".to_string()))
+        );
+    }
+
+    #[test]
+    fn poll_response_success_without_token_is_an_error() {
+        let error = token_from_poll_response(&json!({ "status": "success" }))
+            .expect_err("a successful response must contain a token");
+
+        assert!(error.contains("access_token"));
+    }
+
+    #[test]
+    fn poll_response_error_surfaces_backend_detail() {
+        let error = token_from_poll_response(&json!({ "status": "error", "detail": "denied" }))
+            .expect_err("an error response must fail the poll");
+
+        assert!(error.contains("denied"));
     }
 }
