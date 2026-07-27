@@ -11,7 +11,7 @@ use scitex_cli::error_history::ErrorHistory;
 use scitex_cli::errors::ScientexError;
 use scitex_cli::output::OutputFormat;
 use scitex_cli::types::{ErrorCategory, ErrorReportCreate};
-use scitex_cli::{check_status, login, logout, poll_login_from_env};
+use scitex_cli::{check_status, login, logout};
 
 /// Scientex lab management CLI.
 #[derive(Parser)]
@@ -44,9 +44,6 @@ impl From<&OutputFormatArg> for OutputFormat {
 enum Commands {
     /// Feishu OAuth login.
     Login,
-    /// Finish background login polling.
-    #[command(hide = true)]
-    LoginPoll,
     /// Log out and remove the local token.
     Logout,
     /// Check login status.
@@ -120,11 +117,7 @@ async fn main() {
             return;
         }
         Some(Commands::Login) => {
-            login(&config).await;
-            Ok(())
-        }
-        Some(Commands::LoginPoll) => {
-            if !poll_login_from_env(&config).await {
+            if !login(&config).await {
                 std::process::exit(1);
             }
             Ok(())

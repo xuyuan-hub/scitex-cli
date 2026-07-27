@@ -339,7 +339,14 @@ pub async fn run(
         }
         TasksCommand::Get { id, lab_id } => {
             let task = client.get_lab_task(id, lab_id.as_deref()).await?;
-            print_result(&task, format);
+            let input_requirements =
+                load_task_input_requirements(&client, &task, lab_id.as_deref()).await;
+            match format {
+                OutputFormat::Json => {
+                    print_result(&task_detail_value(&task, &input_requirements), format)
+                }
+                OutputFormat::Text => print_task_detail(&task, &input_requirements),
+            }
         }
         TasksCommand::Part {
             task_id,
@@ -1517,6 +1524,182 @@ fn print_lab_task_type_detail(task_type: &LabTaskTypeDetail) {
     );
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct TaskTypeInputRequirements {
+    id: String,
+    key: String,
+    display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_schema: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TaskPartInputRequirements {
+    part_id: String,
+    part_name: String,
+    task_type_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requirements: Option<TaskTypeInputRequirements>,
+}
+
+async fn load_task_input_requirements(
+    client: &ScientexClient,
+    task: &Task,
+    lab_id: Option<&str>,
+) -> Vec<TaskPartInputRequirements> {
+    let mut task_types = HashMap::<String, Option<LabTaskTypeDetail>>::new();
+    let mut requirements = Vec::new();
+
+    for part in &task.parts {
+        let Some(task_type_id) = part.task_type_id.as_deref() else {
+            continue;
+        };
+        if !task_types.contains_key(task_type_id) {
+            let task_type = client.get_lab_task_type(task_type_id, lab_id).await.ok();
+            task_types.insert(task_type_id.to_string(), task_type);
+        }
+        let task_type = task_types
+            .get(task_type_id)
+            .and_then(|task_type| task_type.as_ref());
+        requirements.push(TaskPartInputRequirements {
+            part_id: part.id.clone(),
+            part_name: part.name.clone(),
+            task_type_id: task_type_id.to_string(),
+            requirements: task_type.map(|task_type| TaskTypeInputRequirements {
+                id: task_type.id.clone(),
+                key: task_type.key.clone(),
+                display_name: task_type.display_name.clone(),
+                description: task_type.description.clone(),
+                input_schema: task_type.input_schema.clone(),
+            }),
+        });
+    }
+
+    requirements
+}
+
+fn task_detail_value(
+    task: &Task,
+    input_requirements: &[TaskPartInputRequirements],
+) -> serde_json::Value {
+    let mut task_detail = serde_json::to_value(task).expect("Task should always serialize");
+    if let Some(object) = task_detail.as_object_mut() {
+        object.insert(
+            "input_requirements".to_string(),
+            serde_json::to_value(input_requirements)
+                .expect("task input requirements should always serialize"),
+        );
+    }
+    task_detail
+}
+
+fn print_task_detail(task: &Task, input_requirements: &[TaskPartInputRequirements]) {
+    println!("{}  {}  {}", task.id, task.status, task.title);
+    if let Some(description) = task
+        .description
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        println!("  {description}");
+    }
+
+    let mut parts = task.parts.iter().collect::<Vec<_>>();
+    parts.sort_by_key(|part| part.sort_order);
+    for part in parts {
+        println!("\n阶段 {}  {}  {}", part.id, part.status, part.name);
+        if let Some(description) = part
+            .description
+            .as_deref()
+            .filter(|value| !value.is_empty())
+        {
+            println!("  {description}");
+        }
+        let requirement = input_requirements
+            .iter()
+            .find(|requirement| requirement.part_id == part.id);
+        match requirement.and_then(|requirement| requirement.requirements.as_ref()) {
+            Some(requirement) => {
+                println!(
+                    "  输入要求（{} / {}）:",
+                    requirement.display_name, requirement.key
+                );
+                if let Some(description) = requirement
+                    .description
+                    .as_deref()
+                    .filter(|value| !value.is_empty())
+                {
+                    for line in description.lines() {
+                        println!("    {line}");
+                    }
+                }
+                print_task_input_schema(requirement.input_schema.as_ref());
+            }
+            None if part.task_type_id.is_some() => {
+                println!("  输入要求暂不可读取（任务类型不再对当前实验室可见）。");
+            }
+            None => {}
+        }
+    }
+}
+
+fn print_task_input_schema(schema: Option<&serde_json::Value>) {
+    let Some(properties) = schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(serde_json::Value::as_object)
+    else {
+        return;
+    };
+    if properties.is_empty() {
+        return;
+    }
+
+    let required = schema
+        .and_then(|schema| schema.get("required"))
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<HashSet<_>>()
+        })
+        .unwrap_or_default();
+    println!("    输入字段:");
+    let mut fields = properties.iter().collect::<Vec<_>>();
+    fields.sort_by(|(left, _), (right, _)| left.cmp(right));
+    for (key, field) in fields {
+        let title = field
+            .get("title")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(key);
+        let field_type = field
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("-");
+        let required_marker = if required.contains(key.as_str()) {
+            " 必填"
+        } else {
+            ""
+        };
+        println!("      {title} ({key}, {field_type}){required_marker}");
+        if let Some(description) = field
+            .get("description")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+        {
+            println!("        {description}");
+        }
+        if let Some(accept) = field
+            .get("accept")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty())
+        {
+            println!("        接受文件: {accept}");
+        }
+    }
+}
+
 fn print_tasks(list: &crate::api_response::PaginatedList<TaskSummary>) {
     print_pagination_metadata(list);
     if list.items.is_empty() {
@@ -1625,6 +1808,46 @@ mod tests {
             dependencies: vec![],
             assignments: vec![],
         }
+    }
+
+    fn task_type_input_requirements() -> TaskPartInputRequirements {
+        TaskPartInputRequirements {
+            part_id: "part-1".to_string(),
+            part_name: "清单导入解析".to_string(),
+            task_type_id: "type-1".to_string(),
+            requirements: Some(TaskTypeInputRequirements {
+                id: "type-1".to_string(),
+                key: "seed_manifest_import".to_string(),
+                display_name: "种子清单导入解析".to_string(),
+                description: Some("样品名称为必填列".to_string()),
+                input_schema: Some(serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "source_file": {"type": "object", "format": "file", "accept": ".xlsx"}
+                    },
+                    "required": ["source_file"]
+                })),
+            }),
+        }
+    }
+
+    #[test]
+    fn task_detail_json_includes_part_input_requirements() {
+        let mut task = task_with_output(None);
+        task.parts = vec![task_part("part-1", Some("type-1"), None, 0)];
+
+        let detail = task_detail_value(&task, &[task_type_input_requirements()]);
+
+        assert_eq!(detail["id"], "task-1");
+        assert_eq!(
+            detail["input_requirements"][0]["requirements"]["key"],
+            "seed_manifest_import"
+        );
+        assert_eq!(
+            detail["input_requirements"][0]["requirements"]["input_schema"]["properties"]
+                ["source_file"]["accept"],
+            ".xlsx"
+        );
     }
 
     #[test]

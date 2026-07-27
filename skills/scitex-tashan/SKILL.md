@@ -1,6 +1,6 @@
 ---
 name: scitex-tashan
-description: "Use when operating the Tashan (他山) project workflows: project info lookup and seed intake object types, batches, records, and stocks."
+description: "Use when operating the Tashan (他山) project workflows: project info lookup and seed intake object types, batches, records, stocks, or when users need the current seed manifest Excel upload requirements, headers, mappings, or template."
 metadata:
   requires:
     bins: ["scitex"]
@@ -43,6 +43,43 @@ scitex project tashan seed records complete <RECORD_ID> -f json
 scitex project tashan seed stocks list -f json
 scitex project tashan seed stocks get <STOCK_ID> -f json
 ```
+
+## Seed Manifest Requirements And Template
+
+When a user asks what seed manifest to upload, which Excel columns are accepted, or for a manifest template, retrieve the live requirements before proposing a table. Do not infer them from a past upload or use `batches import-manifest` merely to discover validation rules.
+
+Use the shortest applicable read-only path:
+
+1. **An intake task ID is known**: run `scitex tasks get <TASK_ID> -f json`. Read the matching part from `input_requirements[].requirements`: its `description` contains the file layout, standard headers, and example row; `input_schema` gives required task fields and accepted file extension. Read that part's `input_data.object_type_config_id`, then fetch the configuration below for project-specific mappings.
+2. **A batch ID is known**: run `scitex project tashan seed batches get <BATCH_ID> -f json`, take its `object_type_config_id`, then run `scitex project tashan seed object-types get <CONFIG_ID> -f json`.
+3. **No intake task exists yet**: discover the lab-visible task type, then read its detail:
+
+   ```bash
+   scitex tasks types --search "种子清单导入" -f json
+   scitex tasks type <TASK_TYPE_ID> -f json
+   ```
+
+4. **Object type is known**: retrieve it directly:
+
+   ```bash
+   scitex project tashan seed object-types get <CONFIG_ID> -f json
+   ```
+
+   If only its code or name is known, list configurations first and ask the user to select an ambiguous match:
+
+   ```bash
+   scitex project tashan seed object-types list -f json
+   ```
+
+Build the user-facing requirements from these sources, in this order:
+
+- State the `.xlsx` acceptance and all worksheet/header/row rules from the task type `description` and `input_schema.properties.source_file`.
+- Copy the standard headers and sample row from the task type description; do not hardcode a stale local header list.
+- If `import_mapping` is present on the object type, show its spreadsheet-header-to-Scientex-field mappings and state that these project-specific aliases override the standard mapping.
+- Treat `completion_required_fields` as requirements for completing a later intake record, not as mandatory columns for uploading the manifest, unless the backend's task description expressly says otherwise.
+- If a user wants an actual `.xlsx` template, create a single-sheet workbook using the retrieved headers and one clearly labelled example row; do not upload it until the user confirms the intended batch and import effect.
+
+When no object type or batch is specified, provide the task type's standard requirements and ask which object type applies before claiming that its custom mappings have been covered.
 
 ## Schema
 

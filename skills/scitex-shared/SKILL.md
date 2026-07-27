@@ -27,7 +27,7 @@ scitex login
 scitex status
 ```
 
-If `login` prints an authorization URL, send that exact URL to the user and wait for them to complete browser auth before continuing.
+If `login` prints an authorization URL, send that exact URL to the user and keep the login command running while they complete browser auth. Continue only after the command reports that the token was saved.
 
 ## Credentials
 
