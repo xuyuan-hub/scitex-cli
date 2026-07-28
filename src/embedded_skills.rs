@@ -170,6 +170,7 @@ mod tests {
             "scitex-experiment",
             "scitex-task",
             "scitex-tashan",
+            "scitex-tool",
             "scitex-error-report",
         ] {
             assert!(

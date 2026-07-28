@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use scitex_cli::commands::{
     admin, error_report, files, inventory, lab, orders, primers, project, projects, skills, tasks,
-    templates, update, users,
+    templates, tools, update, users,
 };
 use scitex_cli::config::Config;
 use scitex_cli::error_history::ErrorHistory;
@@ -79,6 +79,9 @@ enum Commands {
     /// Task management.
     Tasks(tasks::TasksArgs),
 
+    /// Discover and safely run published Tool Catalog entries.
+    Tool(tools::ToolsArgs),
+
     /// Platform administration for tasks, task types, users, and reports.
     Admin(admin::AdminArgs),
 
@@ -143,6 +146,7 @@ async fn main() {
         Some(Commands::Project(args)) => project::run(&args, &config, &format).await,
         Some(Commands::Projects(args)) => projects::run(&args, &config, &format).await,
         Some(Commands::Tasks(args)) => tasks::run(&args, &config, &format).await,
+        Some(Commands::Tool(args)) => tools::run(&args, &config, &format).await,
         Some(Commands::Admin(args)) => admin::run(&args, &config, &format).await,
         Some(Commands::Skills(args)) => skills::run(&args, &format),
         Some(Commands::Update(args)) => update::run(&args, &format).await,
@@ -158,7 +162,17 @@ async fn main() {
         let sanitized_error = sanitize_error_text(&e.to_string());
         history.record(&fingerprint, &cmd, error_type_label(&e), &sanitized_error);
 
-        eprintln!("{}: {e}", "Error".red().bold());
+        match format {
+            OutputFormat::Json => {
+                eprintln!(
+                    "{}",
+                    serde_json::to_string(&error_json(&e)).unwrap_or_else(|_| {
+                        r#"{"error":{"detail":"failed to serialize CLI error"}}"#.to_string()
+                    })
+                );
+            }
+            OutputFormat::Text => eprintln!("{}: {e}", "Error".red().bold()),
+        }
 
         // If the same error keeps happening, offer to report it
         if history.check_threshold(&fingerprint, 10, 3) {
@@ -177,6 +191,35 @@ async fn main() {
 
         std::process::exit(1);
     }
+}
+
+fn error_json(error: &anyhow::Error) -> serde_json::Value {
+    if let Some(ScientexError::HttpError {
+        status,
+        path,
+        detail,
+        error_code,
+        fields,
+        body,
+    }) = error.downcast_ref::<ScientexError>()
+    {
+        return serde_json::json!({
+            "error": {
+                "status": status,
+                "path": path,
+                "detail": detail,
+                "error_code": error_code,
+                "fields": fields,
+                "body": body,
+            }
+        });
+    }
+    serde_json::json!({
+        "error": {
+            "detail": sanitize_error_text(&error.to_string()),
+            "kind": error_type_label(error),
+        }
+    })
 }
 
 fn command_context() -> String {
@@ -386,7 +429,8 @@ async fn submit_error_report(
 
 #[cfg(test)]
 mod tests {
-    use super::{command_context_from_args, sanitize_error_text};
+    use super::{command_context_from_args, error_json, sanitize_error_text};
+    use scitex_cli::ScientexError;
 
     #[test]
     fn command_context_redacts_sensitive_option_values_and_paths() {
@@ -407,6 +451,21 @@ mod tests {
             command_context_from_args(&args),
             "scitex me change-password --current *** --new=*** --docs-folder-token *** --file ***"
         );
+    }
+
+    #[test]
+    fn json_error_preserves_server_body() {
+        let error = anyhow::Error::new(ScientexError::HttpError {
+            status: 422,
+            path: "/seed".to_string(),
+            detail: "invalid manifest".to_string(),
+            error_code: Some("SED_006".to_string()),
+            fields: Some(serde_json::json!({"row": 2})),
+            body: serde_json::json!({"detail": "invalid manifest", "error_code": "SED_006"}),
+        });
+        let value = error_json(&error);
+        assert_eq!(value["error"]["error_code"], "SED_006");
+        assert_eq!(value["error"]["body"]["detail"], "invalid manifest");
     }
 
     #[test]

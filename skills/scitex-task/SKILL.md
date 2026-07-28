@@ -234,6 +234,33 @@ When inspecting a workflow, interpret stage status as:
 
 For compute-only workflows, a dependent compute stage may move from `LOCKED` to `READY`, then to `IN_PROGRESS` and `COMPLETED` automatically once the prerequisite stage completes. The root task can remain `IN_PROGRESS` or `WAITING_LAB_CONFIRM` even when compute stages have output; check stage statuses and `part.output_data.exit_code` before reporting whether compute work finished.
 
+## Rescheduling A Locked Stage
+
+Inspect the specific Lab-visible part first. Its detail includes `not_before_at`, incoming dependencies, schedule-change history, and visible runs:
+
+```bash
+scitex tasks part <TASK_ID> <PART_ID> --timezone Asia/Shanghai -f json
+```
+
+Only a `LOCKED` stage can be rescheduled. Do not call the command for a `READY`, `IN_PROGRESS`, `COMPLETED`, or `BLOCKED` stage, and do not invent a `SCHEDULED` status.
+
+For an absolute release boundary, collect an unambiguous RFC3339 time with offset and a valid IANA timezone:
+
+```bash
+scitex tasks part-reschedule <TASK_ID> <PART_ID> \
+  --release-at 2026-08-01T09:00:00+08:00 --timezone Asia/Shanghai \
+  --reason "move to next shift" --yes
+```
+
+For an additional relative delay after a dependency condition, use one or more exact dependency IDs:
+
+```bash
+scitex tasks part-reschedule <TASK_ID> <PART_ID> \
+  --delay <DEPENDENCY_ID>=1:week --reason "allow recovery" --yes
+```
+
+Supported units are `minute`, `hour`, `day`, and `week`; values are integers from 0 through 9999. To remove an absolute boundary, use `--release-immediately --reason <TEXT>`. Always state the affected stage, old rule, new rule, and non-empty reason before approval. This changes scheduling metadata only; it does not use a client timer, cron, queue, or Worker connection.
+
 ## Lab Context
 
 Do not hardcode `lab_id` into JSON payloads. The CLI will use the current lab or the user can pass `--lab-id`.
@@ -309,7 +336,7 @@ scitex tasks results <TASK_ID> -f json
 
 `tasks get` includes each visible part's user-facing task-type input requirements under `input_requirements`. Inspect those requirements before uploading or replacing a task input file; for a seed manifest import they include the accepted Excel format, table headers, and example rows.
 
-Use `scitex tasks part <TASK_ID> <PART_ID> -f json` when the lab-visible part ID is already known. The backend exposes no lab-scoped full workflow-detail endpoint. Exact stage graph, dependencies, and assignments are available only through `scitex admin tasks workflow <TASK_ID> -f json`, the global platform-admin view. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
+Use `scitex tasks part <TASK_ID> <PART_ID> -f json` when the lab-visible part ID is already known. It includes the selected part's incoming dependencies and schedule history, but it is not a substitute for a global workflow graph or hidden assignments. Exact global structure remains available only through `scitex admin tasks workflow <TASK_ID> -f json` to an authorized platform administrator. Do not instruct a lab member to call it or infer hidden structure when it returns permission denied.
 
 ## Staff Assignment Completion
 

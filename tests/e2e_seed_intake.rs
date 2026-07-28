@@ -12,6 +12,7 @@
 //! ```bash
 //! SCIENTEX_RUN_E2E_TESTS=1 \
 //! SCITEX_E2E_PROJECT_SLUG=<your-project-slug> \
+//! SCITEX_E2E_OBJECT_TYPE_CONFIG_ID=<draft-compatible-config-uuid> \
 //! cargo test --test e2e_seed_intake -- --ignored
 //! ```
 
@@ -34,10 +35,17 @@ fn require_e2e_env() -> String {
         .expect("set SCITEX_E2E_PROJECT_SLUG=<slug> to run this test")
 }
 
+fn require_object_type_config_id() -> String {
+    std::env::var("SCITEX_E2E_OBJECT_TYPE_CONFIG_ID").expect(
+        "set SCITEX_E2E_OBJECT_TYPE_CONFIG_ID to an object type config visible in the test project",
+    )
+}
+
 #[tokio::test]
 #[ignore = "requires live backend + SCIENTEX_RUN_E2E_TESTS=1 + SCITEX_E2E_PROJECT_SLUG"]
 async fn e2e_seed_intake_create_and_list() {
     let slug = require_e2e_env();
+    let object_type_config_id = require_object_type_config_id();
     let client = e2e_client();
 
     // 1. Resolve project by slug to confirm the project exists and auth works
@@ -54,13 +62,13 @@ async fn e2e_seed_intake_create_and_list() {
 
     // 2. Create an intake batch
     let batch = client
-        .create_seed_intake_batch(&slug, &json!({ "name": "e2e-test-batch" }))
+        .create_seed_intake_batch(
+            &slug,
+            &json!({ "object_type_config_id": object_type_config_id }),
+        )
         .await
         .expect("create_seed_intake_batch should succeed");
-    let batch_id = batch["id"]
-        .as_str()
-        .expect("batch response should have an 'id' field")
-        .to_string();
+    let batch_id = batch.id.clone();
     eprintln!("created batch: {batch_id}");
 
     // 3. Fetch the batch back to confirm read-after-write
@@ -69,11 +77,10 @@ async fn e2e_seed_intake_create_and_list() {
         .await
         .expect("get_seed_intake_batch should succeed");
     assert_eq!(
-        fetched["id"].as_str(),
-        Some(batch_id.as_str()),
+        fetched.id, batch_id,
         "fetched batch id should match created batch id"
     );
-    eprintln!("fetched batch: {} — e2e flow passed", fetched["id"]);
+    eprintln!("fetched batch: {} — e2e flow passed", fetched.id);
 
     // 4. List records in the new batch (should be empty but must not error)
     let records = client

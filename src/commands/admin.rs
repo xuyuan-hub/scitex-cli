@@ -146,8 +146,6 @@ pub enum AdminTaskPartsCommand {
         part_id: String,
         file: String,
     },
-    /// Delete a task part.
-    Delete { task_id: String, part_id: String },
 }
 
 #[derive(Subcommand)]
@@ -624,16 +622,6 @@ async fn run_admin_task_parts(
                 .await
                 .map_err(admin_operation_error)?;
             print_result(&part, format);
-        }
-        AdminTaskPartsCommand::Delete { task_id, part_id } => {
-            client
-                .delete_task_part(task_id, part_id)
-                .await
-                .map_err(admin_operation_error)?;
-            print_result(
-                &serde_json::json!({"task_id": task_id, "part_id": part_id, "deleted": true}),
-                format,
-            );
         }
     }
     Ok(())

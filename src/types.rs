@@ -472,6 +472,8 @@ pub struct Task {
     #[serde(default)]
     pub output_data: Option<serde_json::Value>,
     #[serde(default)]
+    pub rerun_source_run_id: Option<String>,
+    #[serde(default)]
     pub source_type: Option<String>,
     #[serde(default)]
     pub source_id: Option<String>,
@@ -514,6 +516,12 @@ pub struct TaskPart {
     pub output_schema: Option<serde_json::Value>,
     #[serde(default)]
     pub output_data: Option<serde_json::Value>,
+    #[serde(default)]
+    pub not_before_at: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<String>,
+    #[serde(default)]
+    pub schedule_metadata: Option<serde_json::Value>,
 }
 
 /// Lab-visible detail for one workflow part, including its documents and results.
@@ -524,6 +532,79 @@ pub struct TaskPartDetail {
     pub documents: Vec<TaskDocument>,
     #[serde(default)]
     pub results: Vec<TaskResult>,
+    #[serde(default)]
+    pub runs: Vec<TaskPartRun>,
+    #[serde(default)]
+    pub incoming_dependencies: Vec<TaskPartDependency>,
+    #[serde(default)]
+    pub schedule_changes: Vec<TaskPartScheduleChange>,
+}
+
+/// A dependency visible from the dependent task part.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPartDependency {
+    pub id: String,
+    pub task_id: String,
+    pub prerequisite_part_id: String,
+    pub dependent_part_id: String,
+    pub condition_type: String,
+    #[serde(default)]
+    pub condition_config: Option<serde_json::Value>,
+}
+
+/// One auditable schedule edit made while a task part was locked.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPartScheduleChange {
+    pub id: String,
+    pub task_id: String,
+    pub part_id: String,
+    pub changed_by_id: String,
+    pub before_schedule: serde_json::Value,
+    pub after_schedule: serde_json::Value,
+    pub created_at: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Immutable, user-visible provenance for one compute attempt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPartRun {
+    pub id: String,
+    pub execution_id: String,
+    pub attempt_no: i64,
+    pub status: String,
+    #[serde(default)]
+    pub tool_version_id: Option<String>,
+    #[serde(default)]
+    pub manifest_digest: Option<String>,
+    #[serde(default)]
+    pub runtime_image_digest: Option<String>,
+    #[serde(default)]
+    pub execution_profile: Option<String>,
+    pub normalized_parameters: serde_json::Value,
+    pub input_artifacts: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub output_artifacts: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub reference_versions: Option<serde_json::Value>,
+    #[serde(default)]
+    pub started_at: Option<String>,
+    #[serde(default)]
+    pub finished_at: Option<String>,
+    #[serde(default)]
+    pub exit_code: Option<i64>,
+    #[serde(default)]
+    pub resource_usage: Option<serde_json::Value>,
+    #[serde(default)]
+    pub stdout_ref: Option<serde_json::Value>,
+    #[serde(default)]
+    pub stderr_ref: Option<serde_json::Value>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+    #[serde(default)]
+    pub error_detail: Option<String>,
+    #[serde(default)]
+    pub provenance: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -701,6 +782,8 @@ pub struct UploadFieldResponse {
     pub content_type: String,
     pub size: u64,
     #[serde(default)]
+    pub sha256: Option<String>,
+    #[serde(default)]
     pub document_id: Option<String>,
 }
 
@@ -875,6 +958,261 @@ pub struct StaffAssignmentDetail {
     pub documents: Vec<StaffDocumentBrief>,
     #[serde(default)]
     pub latest_result: Option<TaskResult>,
+}
+
+// ============================================================
+// Project seed intake and weight-ledger types
+// ============================================================
+
+/// One project-scoped seed intake batch, including its frozen import contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedIntakeBatch {
+    pub id: String,
+    pub project_id: String,
+    pub object_type_config_id: String,
+    pub batch_code: String,
+    pub status: String,
+    pub created_by_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub seed_type_spec_id: Option<String>,
+    #[serde(default)]
+    pub source_summary: Option<serde_json::Value>,
+    #[serde(default)]
+    pub mapping_rules: Option<serde_json::Value>,
+    #[serde(default)]
+    pub source_file_ref: Option<serde_json::Value>,
+    #[serde(default)]
+    pub import_task_id: Option<String>,
+    #[serde(default)]
+    pub import_part_id: Option<String>,
+    #[serde(default)]
+    pub last_import_summary: Option<serde_json::Value>,
+    #[serde(default)]
+    pub completed_by_id: Option<String>,
+    #[serde(default)]
+    pub completed_at: Option<String>,
+}
+
+/// Server acknowledgement that a manifest import workflow was created.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestImportTask {
+    pub task_id: String,
+    pub part_id: String,
+    pub batch_id: String,
+    #[serde(default)]
+    pub source_file_document_id: Option<String>,
+}
+
+/// Server acknowledgement for a three-stage seed intake workflow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedIntakeTask {
+    pub task_id: String,
+    pub work_order_part_id: String,
+    pub physical_intake_part_id: String,
+    pub backfill_part_id: String,
+    pub record_count: u64,
+}
+
+/// Formal seed inventory lot. Every weight is a server-provided decimal string in grams.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedLot {
+    pub id: String,
+    pub project_id: String,
+    pub accession_id: String,
+    pub seed_type_spec_id: String,
+    pub lot_no: String,
+    pub seed_type_code: String,
+    pub initial_weight_g: String,
+    pub on_hand_weight_g: String,
+    pub reserved_weight_g: String,
+    pub available_weight_g: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub source_intake_record_id: Option<String>,
+    #[serde(default)]
+    pub received_at: Option<String>,
+    #[serde(default)]
+    pub current_placement: Option<serde_json::Value>,
+}
+
+/// Immutable ledger movement for a seed lot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedMovement {
+    pub id: String,
+    pub project_id: String,
+    pub lot_id: String,
+    pub movement_no: String,
+    pub movement_type: String,
+    pub on_hand_delta_g: String,
+    pub reserved_delta_g: String,
+    pub on_hand_after_g: String,
+    pub reserved_after_g: String,
+    pub occurred_at: String,
+    pub actor_id: String,
+    pub created_at: String,
+    #[serde(default)]
+    pub reservation_id: Option<String>,
+    #[serde(default)]
+    pub source_placement_id: Option<String>,
+    #[serde(default)]
+    pub target_placement_id: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub attrs: Option<serde_json::Value>,
+}
+
+/// A reversible reservation against a lot's available weight.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedReservation {
+    pub id: String,
+    pub project_id: String,
+    pub lot_id: String,
+    pub reservation_no: String,
+    pub weight_g: String,
+    pub status: String,
+    pub requested_by_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub purpose: Option<String>,
+    #[serde(default)]
+    pub experiment_ref: Option<String>,
+    #[serde(default)]
+    pub released_by_id: Option<String>,
+    #[serde(default)]
+    pub released_at: Option<String>,
+}
+
+/// Current or historical physical placement returned by a lot transfer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeedPlacement {
+    pub id: String,
+    pub lot_id: String,
+    pub container_id: String,
+    pub verification_status: String,
+    pub is_current: bool,
+    pub placed_at: String,
+    #[serde(default)]
+    pub storage_location_id: Option<String>,
+    #[serde(default)]
+    pub storage_site: Option<String>,
+    #[serde(default)]
+    pub storage_location_text: Option<String>,
+    #[serde(default)]
+    pub removed_at: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+// ============================================================
+// Public Tool Catalog types
+// ============================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolSubmissionAvailability {
+    pub version: String,
+    pub status: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicToolVersion {
+    pub id: String,
+    pub version: String,
+    pub manifest_digest: String,
+    pub parameter_schema: serde_json::Value,
+    pub artifact_schema: Vec<serde_json::Value>,
+    pub license_snapshot: String,
+    pub citation_snapshot: String,
+    #[serde(default)]
+    pub published_at: Option<String>,
+}
+
+/// Published user-facing tool metadata. It deliberately excludes execution internals.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicTool {
+    pub id: String,
+    pub key: String,
+    pub display_name: String,
+    pub domain: String,
+    pub family: String,
+    pub tags: Vec<String>,
+    pub source_url: String,
+    pub license_spdx: String,
+    pub citation: String,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub commercial_use_policy: Option<String>,
+    #[serde(default)]
+    pub versions: Vec<PublicToolVersion>,
+    #[serde(default)]
+    pub submission_availability: Option<ToolSubmissionAvailability>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolValidationIssue {
+    pub path: String,
+    pub message: String,
+    pub keyword: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolValidationEstimate {
+    pub timeout_seconds: u64,
+    #[serde(default)]
+    pub dispatches_work: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolValidation {
+    pub valid: bool,
+    pub tool_key: String,
+    pub tool_version_id: String,
+    pub manifest_digest: String,
+    pub estimate: ToolValidationEstimate,
+    #[serde(default)]
+    pub issues: Vec<ToolValidationIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolRun {
+    pub task_id: String,
+    pub part_id: String,
+    pub tool_key: String,
+    pub tool_version_id: String,
+    pub manifest_digest: String,
+    pub task_status: String,
+    pub part_status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskExactRerun {
+    pub source_run_id: String,
+    pub task_id: String,
+    pub part_id: String,
+    pub tool_version_id: String,
+    pub manifest_digest: String,
+    pub runtime_image_digest: String,
+    pub task_status: String,
+    pub part_status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskRunArtifactPreview {
+    pub run_id: String,
+    pub artifact_index: u64,
+    pub filename: String,
+    pub preview: String,
+    pub content: String,
+    pub truncated: bool,
 }
 
 // ============================================================

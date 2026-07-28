@@ -554,7 +554,6 @@ fn command_closure_endpoints_exist_with_methods() {
         ("POST", "/tasks/{id}/parts"),
         ("GET", "/tasks/{id}/parts/{id}"),
         ("PATCH", "/tasks/{id}/parts/{id}"),
-        ("DELETE", "/tasks/{id}/parts/{id}"),
         ("POST", "/tasks/{id}/assignments"),
         ("DELETE", "/tasks/{id}/assignments/{id}"),
         ("POST", "/tasks/{id}/documents"),
@@ -676,6 +675,142 @@ fn cli_lab_task_paths_exist_in_openapi() {
             "CLI lab task path `{path}` not found in OpenAPI"
         );
     }
+}
+
+#[test]
+fn scheduled_task_endpoints_and_response_fields_match_backend() {
+    let doc = load_openapi();
+    assert_operations_exist(
+        &doc,
+        &[
+            ("PATCH", "/lab/tasks/{id}/parts/{id}/release-schedule"),
+            ("POST", "/lab/tasks/{id}/parts/{id}/runs/{id}/rerun"),
+            (
+                "GET",
+                "/lab/tasks/{id}/parts/{id}/runs/{id}/artifacts/{id}/preview",
+            ),
+        ],
+    );
+
+    let part_properties = doc
+        .pointer("/components/schemas/TaskPartResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("TaskPartResponse properties must exist");
+    for field in ["not_before_at", "completed_at", "schedule_metadata"] {
+        assert!(
+            part_properties.contains_key(field),
+            "TaskPartResponse is missing `{field}`"
+        );
+    }
+    let part_detail_properties = doc
+        .pointer("/components/schemas/PartDetailResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("PartDetailResponse properties must exist");
+    for field in ["runs", "incoming_dependencies", "schedule_changes"] {
+        assert!(
+            part_detail_properties.contains_key(field),
+            "PartDetailResponse is missing `{field}`"
+        );
+    }
+
+    // The OpenAPI uses a property enum rather than a top-level enum for this schema.
+    let schedule_modes: HashSet<String> = doc
+        .pointer("/components/schemas/TaskPartReleaseSchedule/properties/mode/enum")
+        .and_then(|value| value.as_array())
+        .expect("TaskPartReleaseSchedule.mode enum must exist")
+        .iter()
+        .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+        .collect();
+    assert_eq!(
+        schedule_modes,
+        HashSet::from(["immediate".into(), "at_time".into()])
+    );
+}
+
+#[test]
+fn seed_lot_and_frozen_manifest_endpoints_match_backend() {
+    let doc = load_openapi();
+    assert_operations_exist(
+        &doc,
+        &[
+            (
+                "GET",
+                "/project/{id}/seed/intake-batches/{id}/manifest-template",
+            ),
+            ("GET", "/project/{id}/seed/lots"),
+            ("GET", "/project/{id}/seed/lots/{id}"),
+            ("GET", "/project/{id}/seed/lots/{id}/movements"),
+            ("GET", "/project/{id}/seed/lots/{id}/reservations"),
+            ("POST", "/project/{id}/seed/lots/{id}/reservations"),
+            ("POST", "/project/{id}/seed/reservations/{id}/release"),
+            ("POST", "/project/{id}/seed/lots/{id}/checkout"),
+            ("POST", "/project/{id}/seed/lots/{id}/transfer"),
+            ("POST", "/project/{id}/seed/lots/{id}/adjustments"),
+        ],
+    );
+    let lot_properties = doc
+        .pointer("/components/schemas/SeedLotResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("SeedLotResponse properties must exist");
+    for field in [
+        "initial_weight_g",
+        "on_hand_weight_g",
+        "reserved_weight_g",
+        "available_weight_g",
+    ] {
+        assert!(
+            lot_properties.contains_key(field),
+            "SeedLotResponse is missing `{field}`"
+        );
+    }
+    let manifest_fields = doc
+        .pointer("/components/schemas/Body_project-seed-create_manifest_import_task/properties")
+        .and_then(|value| value.as_object())
+        .expect("manifest multipart schema must exist");
+    assert!(manifest_fields.contains_key("file"));
+}
+
+#[test]
+fn public_tool_catalog_contract_exposes_only_published_user_fields() {
+    let doc = load_openapi();
+    assert_operations_exist(
+        &doc,
+        &[
+            ("GET", "/tool-catalog/tools"),
+            ("GET", "/tool-catalog/tools/{id}"),
+            ("POST", "/tool-catalog/tools/{id}/validate"),
+            ("POST", "/tool-catalog/tools/{id}/run"),
+        ],
+    );
+    let parameters = query_parameter_names(&doc, "~1api~1v1~1tool-catalog~1tools", "get");
+    for expected in ["skip", "limit", "search", "domain", "family", "tag"] {
+        assert!(
+            parameters.contains(expected),
+            "tool search parameter `{expected}` not found: {parameters:?}"
+        );
+    }
+    let properties = doc
+        .pointer("/components/schemas/PublicToolVersionResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("PublicToolVersionResponse properties must exist");
+    for forbidden in [
+        "entrypoint_ref",
+        "runtime_image_digest",
+        "execution_profile",
+    ] {
+        assert!(
+            !properties.contains_key(forbidden),
+            "public Tool response must not expose `{forbidden}`"
+        );
+    }
+    let upload_fields = doc
+        .pointer("/components/schemas/UploadFieldResponse/properties")
+        .and_then(|value| value.as_object())
+        .expect("UploadFieldResponse properties must exist");
+    assert!(
+        upload_fields.contains_key("sha256"),
+        "FileFieldRef must preserve sha256 when the backend provides it"
+    );
 }
 
 #[test]
