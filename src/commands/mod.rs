@@ -1,4 +1,5 @@
 pub mod admin;
+pub(crate) mod confirm;
 pub mod error_report;
 pub mod files;
 pub mod inventory;
@@ -10,5 +11,6 @@ pub mod projects;
 pub mod skills;
 pub mod tasks;
 pub mod templates;
+pub mod tools;
 pub mod update;
 pub mod users;

@@ -1,6 +1,6 @@
 ---
 name: scitex-tashan
-description: "Use when operating the Tashan (他山) project workflows: project info lookup and seed intake object types, batches, records, stocks, or when users need the current seed manifest Excel upload requirements, headers, mappings, or template."
+description: "Use when operating the Tashan (他山) project workflows: project info lookup, seed intake batches and frozen manifests, seed records, or formal SeedLot weight ledger operations."
 metadata:
   requires:
     bins: ["scitex"]
@@ -28,8 +28,9 @@ scitex project tashan seed object-types get <CONFIG_ID> -f json
 scitex project tashan seed object-types update <CONFIG_ID> '<JSON_OR_FILE>' -f json
 
 scitex project tashan seed batches list -f json
-scitex project tashan seed batches create '<JSON_OR_FILE>' -f json
+scitex project tashan seed batches create --object-type-config <CONFIG_ID> [--batch-code CODE] -f json
 scitex project tashan seed batches get <BATCH_ID> -f json
+scitex project tashan seed batches download-template <BATCH_ID> [--out FILE.xlsx] [--force] -f json
 scitex project tashan seed batches import-manifest <BATCH_ID> --file <PATH> -f json
 scitex project tashan seed batches create-intake-task <BATCH_ID> --record-id <RECORD_ID> -f json
 
@@ -42,44 +43,30 @@ scitex project tashan seed records complete <RECORD_ID> -f json
 
 scitex project tashan seed stocks list -f json
 scitex project tashan seed stocks get <STOCK_ID> -f json
+
+scitex project tashan seed lots list [--type CODE] [--all] -f json
+scitex project tashan seed lots get <LOT_ID> -f json
+scitex project tashan seed lots movements <LOT_ID> -f json
+scitex project tashan seed lots reservations <LOT_ID> -f json
+scitex project tashan seed lots reserve <LOT_ID> --weight-g <DECIMAL_G> --yes -f json
+scitex project tashan seed reservations release <RESERVATION_ID> --yes -f json
+scitex project tashan seed lots checkout <LOT_ID> --weight-g <DECIMAL_G> [--reservation ID] --yes -f json
+scitex project tashan seed lots transfer <LOT_ID> [--location-id ID] [--site TEXT] [--location-text TEXT] [--note TEXT] --yes -f json
+scitex project tashan seed lots adjust <LOT_ID> --type <adjustment|loss|migration_correction> --weight-delta-g <DECIMAL_G> --reason TEXT --yes -f json
 ```
 
-## Seed Manifest Requirements And Template
+## Frozen Seed Manifest Template
 
-When a user asks what seed manifest to upload, which Excel columns are accepted, or for a manifest template, retrieve the live requirements before proposing a table. Do not infer them from a past upload or use `batches import-manifest` merely to discover validation rules.
+An intake batch freezes its own manifest contract. When a batch is known, always download that batch's template before asking the user to fill an Excel file:
 
-Use the shortest applicable read-only path:
+```bash
+scitex project tashan seed batches get <BATCH_ID> -f json
+scitex project tashan seed batches download-template <BATCH_ID> --out manifest.xlsx -f json
+```
 
-1. **An intake task ID is known**: run `scitex tasks get <TASK_ID> -f json`. Read the matching part from `input_requirements[].requirements`: its `description` contains the file layout, standard headers, and example row; `input_schema` gives required task fields and accepted file extension. Read that part's `input_data.object_type_config_id`, then fetch the configuration below for project-specific mappings.
-2. **A batch ID is known**: run `scitex project tashan seed batches get <BATCH_ID> -f json`, take its `object_type_config_id`, then run `scitex project tashan seed object-types get <CONFIG_ID> -f json`.
-3. **No intake task exists yet**: discover the lab-visible task type, then read its detail:
+Do not generate a blank workbook, copy headers from an older batch, or substitute another batch's template. The download is the only authority for the frozen `SeedTypeSpec`; it refuses to overwrite an existing file unless `--force` is explicit.
 
-   ```bash
-   scitex tasks types --search "种子清单导入" -f json
-   scitex tasks type <TASK_TYPE_ID> -f json
-   ```
-
-4. **Object type is known**: retrieve it directly:
-
-   ```bash
-   scitex project tashan seed object-types get <CONFIG_ID> -f json
-   ```
-
-   If only its code or name is known, list configurations first and ask the user to select an ambiguous match:
-
-   ```bash
-   scitex project tashan seed object-types list -f json
-   ```
-
-Build the user-facing requirements from these sources, in this order:
-
-- State the `.xlsx` acceptance and all worksheet/header/row rules from the task type `description` and `input_schema.properties.source_file`.
-- Copy the standard headers and sample row from the task type description; do not hardcode a stale local header list.
-- If `import_mapping` is present on the object type, show its spreadsheet-header-to-Scientex-field mappings and state that these project-specific aliases override the standard mapping.
-- Treat `completion_required_fields` as requirements for completing a later intake record, not as mandatory columns for uploading the manifest, unless the backend's task description expressly says otherwise.
-- If a user wants an actual `.xlsx` template, create a single-sheet workbook using the retrieved headers and one clearly labelled example row; do not upload it until the user confirms the intended batch and import effect.
-
-When no object type or batch is specified, provide the task type's standard requirements and ask which object type applies before claiming that its custom mappings have been covered.
+Before upload, confirm the intended batch and preview that the file is a non-empty readable `.xlsx`. `import-manifest` sends the file as multipart field `file` and only creates an asynchronous import task. After success, report its `task_id`, `part_id`, `batch_id`, and `source_file_document_id`, then inspect the batch or `scitex tasks part <TASK_ID> <PART_ID> -f json` for progress. If the server reports an import conflict such as `SED_006`, do not retry with a different batch; ask whether to create a new draft batch or use the existing manifest.
 
 ## Schema
 
@@ -96,6 +83,12 @@ Relevant schemas:
 JSON inputs may be inline JSON strings or local JSON file paths.
 
 Before creating or updating a record, query `seed field-catalog -f json` and construct dynamic record fields from that catalog. When a batch or status is known, use the documented `records list --batch-id` / `--status` filters rather than a broad list.
+
+## SeedLot Weight Ledger
+
+`seed stocks` is a read-only migration view. Use `seed lots` for formal inventory. All weights are decimal strings in grams with at most four decimal places; do not use floating-point arithmetic or maintain a local balance cache.
+
+Read the current lot, movement, or reservation before proposing a write. `reserve`, `release`, `checkout`, `transfer`, and `adjust` are state-changing and require `--yes` in non-interactive use. Describe the exact lot, decimal weight, reservation (when any), target placement, movement type, and reason before approving. Use only `adjustment`, `loss`, or `migration_correction` for adjustments. Report server-returned movement/reservation/placement identifiers and balances rather than calculating them locally.
 
 ## Rules
 

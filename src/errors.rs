@@ -7,6 +7,9 @@ pub enum ScientexError {
         status: u16,
         path: String,
         detail: String,
+        error_code: Option<String>,
+        fields: Option<serde_json::Value>,
+        body: serde_json::Value,
     },
     #[error("Request failed: {0}")]
     RequestError(#[from] reqwest::Error),

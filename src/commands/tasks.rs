@@ -4,11 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Context;
+use chrono::{DateTime, Local};
+use chrono_tz::Tz;
 use clap::{Args, Subcommand, ValueEnum};
 use colored::Colorize;
 use serde::Serialize;
 
 use crate::client::ScientexClient;
+use crate::commands::confirm::require_confirmation;
 use crate::config::Config;
 use crate::errors::ScientexError;
 use crate::output::{
@@ -78,6 +81,9 @@ pub enum TasksCommand {
         id: String,
         #[arg(long)]
         lab_id: Option<String>,
+        /// IANA timezone used only to render timestamps in text output.
+        #[arg(long)]
+        timezone: Option<String>,
     },
     /// Show one workflow part visible to the current lab.
     Part {
@@ -85,6 +91,33 @@ pub enum TasksCommand {
         part_id: String,
         #[arg(long)]
         lab_id: Option<String>,
+        /// IANA timezone used only to render timestamps in text output.
+        #[arg(long)]
+        timezone: Option<String>,
+    },
+    /// Change the release rules for one still-locked workflow part.
+    PartReschedule {
+        task_id: String,
+        part_id: String,
+        /// Absolute earliest release time (RFC3339 with UTC offset).
+        #[arg(long, conflicts_with = "release_immediately")]
+        release_at: Option<String>,
+        /// IANA timezone used with --release-at and for text output.
+        #[arg(long)]
+        timezone: Option<String>,
+        /// Replace the absolute rule with immediate release.
+        #[arg(long, conflicts_with = "release_at")]
+        release_immediately: bool,
+        /// Dependency delay as DEPENDENCY_ID=VALUE:UNIT (minute/hour/day/week).
+        #[arg(long)]
+        delay: Vec<String>,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        lab_id: Option<String>,
+        /// Confirm this state-changing schedule update in non-interactive use.
+        #[arg(long, default_value_t = false)]
+        yes: bool,
     },
     /// Show global workflow detail for a task (platform_admin or superuser only).
     #[command(hide = true)]
@@ -337,7 +370,12 @@ pub async fn run(
                 OutputFormat::Text => print_tasks(&tasks),
             }
         }
-        TasksCommand::Get { id, lab_id } => {
+        TasksCommand::Get {
+            id,
+            lab_id,
+            timezone,
+        } => {
+            let timezone = parse_timezone(timezone.as_deref())?;
             let task = client.get_lab_task(id, lab_id.as_deref()).await?;
             let input_requirements =
                 load_task_input_requirements(&client, &task, lab_id.as_deref()).await;
@@ -345,18 +383,56 @@ pub async fn run(
                 OutputFormat::Json => {
                     print_result(&task_detail_value(&task, &input_requirements), format)
                 }
-                OutputFormat::Text => print_task_detail(&task, &input_requirements),
+                OutputFormat::Text => print_task_detail(&task, &input_requirements, timezone),
             }
         }
         TasksCommand::Part {
             task_id,
             part_id,
             lab_id,
+            timezone,
         } => {
+            let timezone = parse_timezone(timezone.as_deref())?;
             let part = client
                 .get_lab_task_part(task_id, part_id, lab_id.as_deref())
                 .await?;
-            print_result(&part, format);
+            match format {
+                OutputFormat::Json => print_result(&part, format),
+                OutputFormat::Text => print_task_part_detail(&part, timezone),
+            }
+        }
+        TasksCommand::PartReschedule {
+            task_id,
+            part_id,
+            release_at,
+            timezone,
+            release_immediately,
+            delay,
+            reason,
+            lab_id,
+            yes,
+        } => {
+            let timezone = parse_timezone(timezone.as_deref())?;
+            let body = build_schedule_update(
+                release_at.as_deref(),
+                timezone,
+                *release_immediately,
+                delay,
+                reason,
+            )?;
+            require_confirmation(
+                &format!(
+                    "Change release rules for task part {part_id} in task {task_id}.\nNew schedule: {body}"
+                ),
+                *yes,
+            )?;
+            let part = client
+                .update_lab_task_part_release_schedule(task_id, part_id, &body, lab_id.as_deref())
+                .await?;
+            match format {
+                OutputFormat::Json => print_result(&part, format),
+                OutputFormat::Text => print_task_part_schedule(&part, timezone),
+            }
         }
         TasksCommand::Workflow { id } => {
             let workflow = client.get_task_workflow(id).await?;
@@ -704,6 +780,134 @@ fn normalize_task_create_payload(data: &mut serde_json::Value) -> anyhow::Result
     Ok(())
 }
 
+fn parse_timezone(value: Option<&str>) -> anyhow::Result<Option<Tz>> {
+    value
+        .map(|value| {
+            value
+                .parse::<Tz>()
+                .map_err(|_| anyhow::anyhow!("Invalid IANA timezone `{value}`"))
+        })
+        .transpose()
+}
+
+fn build_schedule_update(
+    release_at: Option<&str>,
+    timezone: Option<Tz>,
+    release_immediately: bool,
+    delays: &[String],
+    reason: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let reason = reason.trim();
+    if reason.is_empty() {
+        anyhow::bail!("--reason must be non-empty");
+    }
+    if release_at.is_none() && !release_immediately && delays.is_empty() {
+        anyhow::bail!(
+            "Specify --release-at, --release-immediately, or at least one --delay when rescheduling"
+        );
+    }
+
+    let mut body = serde_json::Map::new();
+    if release_immediately {
+        body.insert(
+            "release_schedule".to_string(),
+            serde_json::json!({ "mode": "immediate" }),
+        );
+    } else if let Some(release_at) = release_at {
+        let timezone = timezone
+            .ok_or_else(|| anyhow::anyhow!("--timezone <IANA> is required with --release-at"))?;
+        validate_rfc3339_offset(release_at)?;
+        body.insert(
+            "release_schedule".to_string(),
+            serde_json::json!({
+                "mode": "at_time",
+                "not_before_at": release_at,
+                "timezone": timezone.to_string(),
+            }),
+        );
+    }
+    if !delays.is_empty() {
+        let parsed = delays
+            .iter()
+            .map(|delay| parse_dependency_delay(delay))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        body.insert(
+            "dependency_delays".to_string(),
+            serde_json::Value::Array(parsed),
+        );
+    }
+    body.insert("reason".to_string(), serde_json::json!(reason));
+    Ok(serde_json::Value::Object(body))
+}
+
+fn parse_dependency_delay(value: &str) -> anyhow::Result<serde_json::Value> {
+    let (dependency_id, delay) = value
+        .split_once('=')
+        .ok_or_else(|| anyhow::anyhow!("--delay must use DEPENDENCY_ID=VALUE:UNIT"))?;
+    let (number, unit) = delay
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("--delay must use DEPENDENCY_ID=VALUE:UNIT"))?;
+    let dependency_id = dependency_id.trim();
+    if dependency_id.is_empty() {
+        anyhow::bail!("--delay dependency ID must be non-empty");
+    }
+    let value = number
+        .trim()
+        .parse::<u16>()
+        .map_err(|_| anyhow::anyhow!("--delay VALUE must be an integer from 0 to 9999"))?;
+    if value > 9999 {
+        anyhow::bail!("--delay VALUE must be an integer from 0 to 9999");
+    }
+    let unit = unit.trim();
+    if !matches!(unit, "minute" | "hour" | "day" | "week") {
+        anyhow::bail!("--delay UNIT must be one of minute, hour, day, week");
+    }
+    Ok(serde_json::json!({
+        "dependency_id": dependency_id,
+        "value": value,
+        "unit": unit,
+    }))
+}
+
+fn validate_rfc3339_offset(value: &str) -> anyhow::Result<()> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|_| ())
+        .map_err(|_| anyhow::anyhow!("Expected RFC3339 date-time with UTC offset: `{value}`"))
+}
+
+fn validate_release_schedule_value(value: &serde_json::Value) -> anyhow::Result<()> {
+    let schedule = value
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("release_schedule must be a JSON object"))?;
+    let mode = schedule
+        .get("mode")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("release_schedule requires mode"))?;
+    match mode {
+        "immediate" => {
+            if schedule.contains_key("not_before_at") || schedule.contains_key("timezone") {
+                anyhow::bail!(
+                    "immediate release_schedule cannot include not_before_at or timezone"
+                );
+            }
+        }
+        "at_time" => {
+            let at = schedule
+                .get("not_before_at")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("at_time release_schedule requires not_before_at")
+                })?;
+            validate_rfc3339_offset(at)?;
+            if let Some(timezone) = schedule.get("timezone").and_then(serde_json::Value::as_str) {
+                parse_timezone(Some(timezone))?;
+            }
+        }
+        _ => anyhow::bail!("release_schedule.mode must be immediate or at_time"),
+    }
+    Ok(())
+}
+
 fn validate_task_create_payload(data: &serde_json::Value) -> anyhow::Result<()> {
     let obj = data
         .as_object()
@@ -735,6 +939,14 @@ fn validate_task_create_payload(data: &serde_json::Value) -> anyhow::Result<()> 
             .ok_or_else(|| {
                 anyhow::anyhow!("Task part #{} requires a non-empty `client_key`", index + 1)
             })?;
+        if let Some(schedule) = part_obj.get("release_schedule") {
+            validate_release_schedule_value(schedule).map_err(|error| {
+                anyhow::anyhow!(
+                    "Workflow part #{} has invalid release_schedule: {error}",
+                    index + 1
+                )
+            })?;
+        }
     }
 
     Ok(())
@@ -824,6 +1036,17 @@ fn validate_task_workflow_payload(data: &serde_json::Value) -> anyhow::Result<()
                 .entry(prerequisite.to_string())
                 .or_default()
                 .push(dependent.to_string());
+            if let Some(delay_seconds) = dep_obj
+                .get("condition_config")
+                .and_then(|value| value.get("delay_seconds"))
+            {
+                if delay_seconds.as_u64().is_none() {
+                    anyhow::bail!(
+                        "Workflow dependency #{} condition_config.delay_seconds must be a non-negative integer",
+                        index + 1
+                    );
+                }
+            }
         }
     }
 
@@ -1595,7 +1818,11 @@ fn task_detail_value(
     task_detail
 }
 
-fn print_task_detail(task: &Task, input_requirements: &[TaskPartInputRequirements]) {
+fn print_task_detail(
+    task: &Task,
+    input_requirements: &[TaskPartInputRequirements],
+    timezone: Option<Tz>,
+) {
     println!("{}  {}  {}", task.id, task.status, task.title);
     if let Some(description) = task
         .description
@@ -1608,7 +1835,13 @@ fn print_task_detail(task: &Task, input_requirements: &[TaskPartInputRequirement
     let mut parts = task.parts.iter().collect::<Vec<_>>();
     parts.sort_by_key(|part| part.sort_order);
     for part in parts {
-        println!("\n阶段 {}  {}  {}", part.id, part.status, part.name);
+        println!(
+            "\n阶段 {}  {}  {}",
+            part.id,
+            schedule_status_label(part, timezone),
+            part.name
+        );
+        print_task_part_times(part, timezone);
         if let Some(description) = part
             .description
             .as_deref()
@@ -1641,6 +1874,91 @@ fn print_task_detail(task: &Task, input_requirements: &[TaskPartInputRequirement
             }
             None => {}
         }
+    }
+}
+
+fn print_task_part_detail(detail: &crate::types::TaskPartDetail, timezone: Option<Tz>) {
+    let part = &detail.part;
+    println!("Part: {}  {}", part.id, part.name);
+    println!("Status: {}", schedule_status_label(part, timezone));
+    print_task_part_times(part, timezone);
+    if !detail.incoming_dependencies.is_empty() {
+        println!("Incoming dependencies:");
+        for dependency in &detail.incoming_dependencies {
+            println!(
+                "  {} → {}  {}  {}",
+                dependency.prerequisite_part_id,
+                dependency.dependent_part_id,
+                dependency.condition_type,
+                dependency
+                    .condition_config
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "-".to_string())
+            );
+        }
+    }
+    if !detail.schedule_changes.is_empty() {
+        println!("Schedule changes:");
+        for change in &detail.schedule_changes {
+            println!(
+                "  {}  {}",
+                render_timestamp(&change.created_at, timezone),
+                change.reason.as_deref().unwrap_or("-")
+            );
+        }
+    }
+    if !detail.runs.is_empty() {
+        println!("Compute runs:");
+        for run in &detail.runs {
+            println!(
+                "  {}  {}  version={} manifest={}",
+                run.id,
+                run.status,
+                run.tool_version_id.as_deref().unwrap_or("-"),
+                run.manifest_digest.as_deref().unwrap_or("-")
+            );
+        }
+    }
+}
+
+fn print_task_part_schedule(part: &TaskPart, timezone: Option<Tz>) {
+    println!("Part: {}  {}", part.id, part.name);
+    println!("Status: {}", schedule_status_label(part, timezone));
+    print_task_part_times(part, timezone);
+}
+
+fn print_task_part_times(part: &TaskPart, timezone: Option<Tz>) {
+    if let Some(not_before_at) = &part.not_before_at {
+        println!("Not before: {}", render_timestamp(not_before_at, timezone));
+    }
+    if let Some(completed_at) = &part.completed_at {
+        println!("Completed: {}", render_timestamp(completed_at, timezone));
+    }
+    if let Some(metadata) = &part.schedule_metadata {
+        println!("Schedule metadata: {metadata}");
+    }
+}
+
+fn schedule_status_label(part: &TaskPart, timezone: Option<Tz>) -> String {
+    if part.status == "LOCKED" {
+        if let Some(not_before_at) = &part.not_before_at {
+            return format!("等待发布至 {}", render_timestamp(not_before_at, timezone));
+        }
+    }
+    if part.status == "READY" {
+        return "已发布，等待分配/执行".to_string();
+    }
+    part.status.clone()
+}
+
+fn render_timestamp(value: &str, timezone: Option<Tz>) -> String {
+    let Ok(timestamp) = DateTime::parse_from_rfc3339(value) else {
+        return value.to_string();
+    };
+    match timezone {
+        Some(timezone) => timestamp.with_timezone(&timezone).to_rfc3339(),
+        None => timestamp.with_timezone(&Local).to_rfc3339(),
     }
 }
 
@@ -1772,6 +2090,7 @@ mod tests {
             description: None,
             input_data: None,
             output_data,
+            rerun_source_run_id: None,
             source_type: None,
             source_id: None,
             task_type_id: Some("type-1".to_string()),
@@ -1798,6 +2117,9 @@ mod tests {
             input_data: None,
             output_schema: None,
             output_data,
+            not_before_at: None,
+            completed_at: None,
+            schedule_metadata: None,
         }
     }
 
@@ -2183,13 +2505,101 @@ mod tests {
                 task_id,
                 part_id,
                 lab_id,
+                timezone,
             } => {
                 assert_eq!(task_id, "task-1");
                 assert_eq!(part_id, "part-1");
                 assert_eq!(lab_id.as_deref(), Some("lab-1"));
+                assert_eq!(timezone, None);
             }
             _ => panic!("expected lab task part command"),
         }
+    }
+
+    #[test]
+    fn parses_part_reschedule_with_absolute_time_and_delay() {
+        let args = parse_tasks(&[
+            "tasks",
+            "part-reschedule",
+            "task-1",
+            "part-1",
+            "--release-at",
+            "2026-08-01T09:00:00+08:00",
+            "--timezone",
+            "Asia/Shanghai",
+            "--delay",
+            "dependency-1=1:week",
+            "--reason",
+            "move to next shift",
+            "--lab-id",
+            "lab-1",
+            "--yes",
+        ]);
+        match args.command {
+            TasksCommand::PartReschedule {
+                task_id,
+                part_id,
+                release_at,
+                timezone,
+                delay,
+                reason,
+                lab_id,
+                yes,
+                ..
+            } => {
+                assert_eq!(task_id, "task-1");
+                assert_eq!(part_id, "part-1");
+                assert_eq!(release_at.as_deref(), Some("2026-08-01T09:00:00+08:00"));
+                assert_eq!(timezone.as_deref(), Some("Asia/Shanghai"));
+                assert_eq!(delay, vec!["dependency-1=1:week"]);
+                assert_eq!(reason, "move to next shift");
+                assert_eq!(lab_id.as_deref(), Some("lab-1"));
+                assert!(yes);
+            }
+            _ => panic!("expected part reschedule command"),
+        }
+    }
+
+    #[test]
+    fn builds_and_validates_schedule_update() {
+        let update = build_schedule_update(
+            Some("2026-08-01T09:00:00+08:00"),
+            Some("Asia/Shanghai".parse().unwrap()),
+            false,
+            &["dependency-1=1:week".to_string()],
+            "move to next shift",
+        )
+        .expect("valid schedule update");
+        assert_eq!(update["release_schedule"]["mode"], "at_time");
+        assert_eq!(update["release_schedule"]["timezone"], "Asia/Shanghai");
+        assert_eq!(update["dependency_delays"][0]["value"], 1);
+        assert_eq!(update["dependency_delays"][0]["unit"], "week");
+
+        assert!(build_schedule_update(
+            Some("2026-08-01 09:00:00"),
+            Some("Asia/Shanghai".parse().unwrap()),
+            false,
+            &[],
+            "reason",
+        )
+        .is_err());
+        assert!(parse_dependency_delay("dependency-1=1:month").is_err());
+        assert!(parse_dependency_delay("dependency-1=10000:day").is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_workflow_release_schedule() {
+        let payload = json!({
+            "title": "invalid schedule",
+            "parts": [{
+                "client_key": "stage",
+                "release_schedule": {
+                    "mode": "immediate",
+                    "not_before_at": "2026-08-01T09:00:00+08:00"
+                }
+            }]
+        });
+        assert!(validate_task_create_payload(&payload).is_err());
     }
 
     #[test]

@@ -3,10 +3,10 @@
   "backend_repository": "xuyuan-hub/scientex",
   "backend_commit": null,
   "openapi": {
-    "baseline_date": "2026-07-16",
+    "baseline_date": "2026-07-28",
     "info_version": "0.1.0",
     "fixture": "tests/fixtures/openapi.json",
-    "fixture_sha256": "b0e2a633b8bab8a09f1f7d0ee71a071aba6f05c0477f9891ba9341363d9e85d7"
+    "fixture_sha256": "2179f37914b2a3f0e709d403d611cbaae4cea7285dfe8d1151efbed8162807be"
   },
-  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-16 pinned OpenAPI fixture; this Release separates Lab, Staff, and platform-admin task views, adds lightweight Lab task-type discovery, atomic staff completion, global task administration, reusable file uploads, primers, and server-side order/Lab filters. v0.4.18 normalizes staff TaskResultCreate payloads for submit-result and complete, corrects ui_display error-report filtering, and isolates error-history unit tests from user data. v0.4.19 keeps Feishu CLI OAuth polling in the initiating process, exposes user-facing task-type input requirements in lab task details, and lets the Tashan seed workflow retrieve current manifest upload rules and per-object-type header mappings."
+  "notes": "CLI DTOs, commands, tests, and bundled Skills are aligned to the 2026-07-28 pinned OpenAPI fixture. This baseline adds lab-part scheduling and reruns, public Tool Catalog execution, frozen seed-manifest template downloads, and seed-lot inventory operations. The backend does not expose DELETE /tasks/{task_id}/parts/{part_id}; the obsolete CLI command is intentionally removed."
 }

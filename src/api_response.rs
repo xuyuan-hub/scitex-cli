@@ -141,14 +141,43 @@ pub(crate) async fn parse_response<T: DeserializeOwned>(
 ) -> Result<T, ScientexError> {
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
-        let detail = resp.text().await.unwrap_or_default();
-        return Err(ScientexError::HttpError {
-            status,
-            path: path.to_string(),
-            detail,
-        });
+        let text = resp.text().await.unwrap_or_default();
+        return Err(http_error_from_text(status, path, text));
     }
     resp.json::<T>().await.map_err(ScientexError::RequestError)
+}
+
+/// Preserve the complete backend error payload while giving text-mode callers a
+/// concise detail string. Backends that still return a plain-text failure are
+/// represented as a JSON string rather than being discarded.
+pub(crate) fn http_error_from_text(status: u16, path: &str, text: String) -> ScientexError {
+    let body = serde_json::from_str::<serde_json::Value>(&text)
+        .unwrap_or_else(|_| serde_json::Value::String(text.clone()));
+    let object = body.as_object();
+    let detail_value = object.and_then(|value| value.get("detail"));
+    let detail = detail_value
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .or_else(|| detail_value.map(serde_json::Value::to_string))
+        .or_else(|| {
+            object
+                .and_then(|value| value.get("message"))
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        })
+        .unwrap_or_else(|| text.clone());
+    let error_code = object
+        .and_then(|value| value.get("error_code"))
+        .and_then(|value| value.as_str())
+        .map(ToOwned::to_owned);
+    let fields = object.and_then(|value| value.get("fields")).cloned();
+
+    ScientexError::HttpError {
+        status,
+        path: path.to_string(),
+        detail,
+        error_code,
+        fields,
+        body,
+    }
 }
 
 pub(crate) fn extract_array<T: DeserializeOwned>(
@@ -222,6 +251,30 @@ mod tests {
         let result: Result<Vec<Item>, ScientexError> =
             extract_array(serde_json::json!({ "data": { "id": "a" } }));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn preserves_structured_http_error_payload() {
+        let error = http_error_from_text(
+            422,
+            "/example",
+            r#"{"detail":"invalid row","error_code":"SED_006","fields":{"row":2}}"#.to_string(),
+        );
+        match error {
+            ScientexError::HttpError {
+                detail,
+                error_code,
+                fields,
+                body,
+                ..
+            } => {
+                assert_eq!(detail, "invalid row");
+                assert_eq!(error_code.as_deref(), Some("SED_006"));
+                assert_eq!(fields.expect("fields")["row"], 2);
+                assert_eq!(body["error_code"], "SED_006");
+            }
+            _ => panic!("expected HTTP error"),
+        }
     }
 
     // ---- Paginated extraction ----

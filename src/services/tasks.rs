@@ -6,8 +6,8 @@ use crate::errors::ScientexError;
 use crate::services::{empty_body, path_segment_encode, url_encode};
 use crate::types::{
     LabTaskTypeDetail, LabTaskTypeListItem, StaffAssignmentDetail, StaffAssignmentItem, Task,
-    TaskDocument, TaskPartDetail, TaskResult, TaskSummary, TaskType, UploadFieldResponse,
-    WorkflowDetail,
+    TaskDocument, TaskExactRerun, TaskPart, TaskPartDetail, TaskResult, TaskRunArtifactPreview,
+    TaskSummary, TaskType, UploadFieldResponse, WorkflowDetail,
 };
 
 impl ScientexClient {
@@ -98,6 +98,62 @@ impl ScientexClient {
         lab_id: Option<&str>,
     ) -> Result<TaskPartDetail, ScientexError> {
         let path = lab_task_part_path(task_id, part_id);
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .get_with_headers(&path, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.get(&path).await?
+        };
+        extract_object(resp)
+    }
+
+    pub async fn update_lab_task_part_release_schedule(
+        &self,
+        task_id: &str,
+        part_id: &str,
+        data: &serde_json::Value,
+        lab_id: Option<&str>,
+    ) -> Result<TaskPart, ScientexError> {
+        let path = lab_task_part_release_schedule_path(task_id, part_id);
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .patch_with_headers(&path, data, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.patch(&path, data).await?
+        };
+        extract_object(resp)
+    }
+
+    pub async fn rerun_lab_task_part_run(
+        &self,
+        task_id: &str,
+        part_id: &str,
+        run_id: &str,
+        lab_id: Option<&str>,
+    ) -> Result<TaskExactRerun, ScientexError> {
+        let path = lab_task_part_run_rerun_path(task_id, part_id, run_id);
+        let body = empty_body();
+        let resp: serde_json::Value = if let Some(lab_id) = lab_id {
+            self.http
+                .post_with_headers(&path, &body, &[("X-Current-Lab", lab_id)])
+                .await?
+        } else {
+            self.http.post(&path, &body).await?
+        };
+        extract_object(resp)
+    }
+
+    pub async fn get_lab_task_run_artifact_preview(
+        &self,
+        task_id: &str,
+        part_id: &str,
+        run_id: &str,
+        artifact_index: u64,
+        lab_id: Option<&str>,
+    ) -> Result<TaskRunArtifactPreview, ScientexError> {
+        let path = lab_task_run_artifact_preview_path(task_id, part_id, run_id, artifact_index);
         let resp: serde_json::Value = if let Some(lab_id) = lab_id {
             self.http
                 .get_with_headers(&path, &[("X-Current-Lab", lab_id)])
@@ -268,16 +324,6 @@ impl ScientexClient {
             .patch(&task_part_path(task_id, part_id), data)
             .await?;
         extract_object(resp)
-    }
-
-    pub async fn delete_task_part(
-        &self,
-        task_id: &str,
-        part_id: &str,
-    ) -> Result<(), ScientexError> {
-        self.http
-            .delete_empty(&task_part_path(task_id, part_id))
-            .await
     }
 
     pub async fn create_task_assignment(
@@ -683,6 +729,31 @@ fn lab_task_part_path(task_id: &str, part_id: &str) -> String {
     )
 }
 
+fn lab_task_part_release_schedule_path(task_id: &str, part_id: &str) -> String {
+    format!("{}/release-schedule", lab_task_part_path(task_id, part_id))
+}
+
+fn lab_task_part_run_rerun_path(task_id: &str, part_id: &str, run_id: &str) -> String {
+    format!(
+        "{}/runs/{}/rerun",
+        lab_task_part_path(task_id, part_id),
+        path_segment_encode(run_id)
+    )
+}
+
+fn lab_task_run_artifact_preview_path(
+    task_id: &str,
+    part_id: &str,
+    run_id: &str,
+    artifact_index: u64,
+) -> String {
+    format!(
+        "{}/runs/{}/artifacts/{artifact_index}/preview",
+        lab_task_part_path(task_id, part_id),
+        path_segment_encode(run_id)
+    )
+}
+
 fn lab_task_confirm_path(task_id: &str) -> String {
     format!("{}/confirm", lab_task_path(task_id))
 }
@@ -824,6 +895,18 @@ mod tests {
         assert_eq!(
             lab_task_part_path("task 1", "part/1"),
             "/lab/tasks/task%201/parts/part%2F1"
+        );
+        assert_eq!(
+            lab_task_part_release_schedule_path("task 1", "part/1"),
+            "/lab/tasks/task%201/parts/part%2F1/release-schedule"
+        );
+        assert_eq!(
+            lab_task_part_run_rerun_path("task 1", "part/1", "run/1"),
+            "/lab/tasks/task%201/parts/part%2F1/runs/run%2F1/rerun"
+        );
+        assert_eq!(
+            lab_task_run_artifact_preview_path("task 1", "part/1", "run/1", 2),
+            "/lab/tasks/task%201/parts/part%2F1/runs/run%2F1/artifacts/2/preview"
         );
         assert_eq!(
             lab_task_documents_path("task 1"),

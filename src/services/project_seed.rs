@@ -2,6 +2,11 @@ use crate::api_response::{envelope_data, extract_object, extract_paginated, Pagi
 use crate::client::ScientexClient;
 use crate::errors::ScientexError;
 use crate::services::{path_segment_encode, url_encode};
+use crate::types::{
+    ManifestImportTask, SeedIntakeBatch, SeedIntakeTask, SeedLot, SeedMovement, SeedPlacement,
+    SeedReservation,
+};
+use std::path::{Path, PathBuf};
 
 impl ScientexClient {
     pub async fn list_seed_object_types(
@@ -49,7 +54,7 @@ impl ScientexClient {
     pub async fn list_seed_intake_batches(
         &self,
         slug: &str,
-    ) -> Result<PaginatedList<serde_json::Value>, ScientexError> {
+    ) -> Result<PaginatedList<SeedIntakeBatch>, ScientexError> {
         let resp: serde_json::Value = self.http.get(&seed_batches_path(slug)).await?;
         extract_paginated(resp)
     }
@@ -58,7 +63,7 @@ impl ScientexClient {
         &self,
         slug: &str,
         data: &serde_json::Value,
-    ) -> Result<serde_json::Value, ScientexError> {
+    ) -> Result<SeedIntakeBatch, ScientexError> {
         let resp: serde_json::Value = self.http.post(&seed_batches_path(slug), data).await?;
         extract_object(resp)
     }
@@ -67,9 +72,23 @@ impl ScientexClient {
         &self,
         slug: &str,
         batch_id: &str,
-    ) -> Result<serde_json::Value, ScientexError> {
+    ) -> Result<SeedIntakeBatch, ScientexError> {
         let resp: serde_json::Value = self.http.get(&seed_batch_path(slug, batch_id)).await?;
         extract_object(resp)
+    }
+
+    pub async fn download_seed_manifest_template(
+        &self,
+        slug: &str,
+        batch_id: &str,
+        output: Option<&Path>,
+        force: bool,
+    ) -> Result<(PathBuf, String), ScientexError> {
+        let downloaded = self
+            .http
+            .download_to_file(&seed_manifest_template_path(slug, batch_id), output, force)
+            .await?;
+        Ok((downloaded.path, downloaded.server_filename))
     }
 
     pub async fn create_seed_manifest_import_task(
@@ -77,7 +96,7 @@ impl ScientexClient {
         slug: &str,
         batch_id: &str,
         file_path: &str,
-    ) -> Result<serde_json::Value, ScientexError> {
+    ) -> Result<ManifestImportTask, ScientexError> {
         let resp: serde_json::Value = self
             .http
             .post_multipart(
@@ -95,7 +114,7 @@ impl ScientexClient {
         slug: &str,
         batch_id: &str,
         record_ids: &[String],
-    ) -> Result<serde_json::Value, ScientexError> {
+    ) -> Result<SeedIntakeTask, ScientexError> {
         let body = if record_ids.is_empty() {
             serde_json::json!({})
         } else {
@@ -193,6 +212,116 @@ impl ScientexClient {
         extract_object(resp)
     }
 
+    pub async fn list_seed_lots(
+        &self,
+        slug: &str,
+        seed_type_code: Option<&str>,
+        skip: u32,
+        limit: u32,
+    ) -> Result<PaginatedList<SeedLot>, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .get(&seed_lots_path(slug, seed_type_code, skip, limit))
+            .await?;
+        extract_paginated(response)
+    }
+
+    pub async fn get_seed_lot(&self, slug: &str, lot_id: &str) -> Result<SeedLot, ScientexError> {
+        let response: serde_json::Value = self.http.get(&seed_lot_path(slug, lot_id)).await?;
+        extract_object(response)
+    }
+
+    pub async fn list_seed_lot_movements(
+        &self,
+        slug: &str,
+        lot_id: &str,
+    ) -> Result<PaginatedList<SeedMovement>, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .get(&seed_lot_movements_path(slug, lot_id))
+            .await?;
+        extract_paginated(response)
+    }
+
+    pub async fn list_seed_lot_reservations(
+        &self,
+        slug: &str,
+        lot_id: &str,
+    ) -> Result<PaginatedList<SeedReservation>, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .get(&seed_lot_reservations_path(slug, lot_id))
+            .await?;
+        extract_paginated(response)
+    }
+
+    pub async fn reserve_seed_lot(
+        &self,
+        slug: &str,
+        lot_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<SeedReservation, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .post(&seed_lot_reservations_path(slug, lot_id), data)
+            .await?;
+        extract_object(response)
+    }
+
+    pub async fn release_seed_reservation(
+        &self,
+        slug: &str,
+        reservation_id: &str,
+    ) -> Result<SeedReservation, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .post(
+                &seed_reservation_release_path(slug, reservation_id),
+                &serde_json::json!({}),
+            )
+            .await?;
+        extract_object(response)
+    }
+
+    pub async fn checkout_seed_lot(
+        &self,
+        slug: &str,
+        lot_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<SeedMovement, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .post(&seed_lot_checkout_path(slug, lot_id), data)
+            .await?;
+        extract_object(response)
+    }
+
+    pub async fn transfer_seed_lot(
+        &self,
+        slug: &str,
+        lot_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<SeedPlacement, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .post(&seed_lot_transfer_path(slug, lot_id), data)
+            .await?;
+        extract_object(response)
+    }
+
+    pub async fn adjust_seed_lot(
+        &self,
+        slug: &str,
+        lot_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<SeedMovement, ScientexError> {
+        let response: serde_json::Value = self
+            .http
+            .post(&seed_lot_adjustments_path(slug, lot_id), data)
+            .await?;
+        extract_object(response)
+    }
+
     /// Return metadata for all available seed intake record fields.
     ///
     /// The response is a `SeedFieldCatalogResponse` envelope:
@@ -236,6 +365,10 @@ fn seed_batch_path(slug: &str, batch_id: &str) -> String {
 
 fn seed_manifest_import_task_path(slug: &str, batch_id: &str) -> String {
     format!("{}/manifest-import-task", seed_batch_path(slug, batch_id))
+}
+
+fn seed_manifest_template_path(slug: &str, batch_id: &str) -> String {
+    format!("{}/manifest-template", seed_batch_path(slug, batch_id))
 }
 
 fn seed_intake_task_path(slug: &str, batch_id: &str) -> String {
@@ -293,6 +426,48 @@ fn seed_stock_path(slug: &str, stock_id: &str) -> String {
     )
 }
 
+fn seed_lots_path(slug: &str, seed_type_code: Option<&str>, skip: u32, limit: u32) -> String {
+    let mut params = vec![format!("skip={skip}"), format!("limit={limit}")];
+    push_query_param(&mut params, "seed_type_code", seed_type_code);
+    format!("{}/lots?{}", seed_base_path(slug), params.join("&"))
+}
+
+fn seed_lot_path(slug: &str, lot_id: &str) -> String {
+    format!(
+        "{}/lots/{}",
+        seed_base_path(slug),
+        path_segment_encode(lot_id)
+    )
+}
+
+fn seed_lot_movements_path(slug: &str, lot_id: &str) -> String {
+    format!("{}/movements", seed_lot_path(slug, lot_id))
+}
+
+fn seed_lot_reservations_path(slug: &str, lot_id: &str) -> String {
+    format!("{}/reservations", seed_lot_path(slug, lot_id))
+}
+
+fn seed_reservation_release_path(slug: &str, reservation_id: &str) -> String {
+    format!(
+        "{}/reservations/{}/release",
+        seed_base_path(slug),
+        path_segment_encode(reservation_id)
+    )
+}
+
+fn seed_lot_checkout_path(slug: &str, lot_id: &str) -> String {
+    format!("{}/checkout", seed_lot_path(slug, lot_id))
+}
+
+fn seed_lot_transfer_path(slug: &str, lot_id: &str) -> String {
+    format!("{}/transfer", seed_lot_path(slug, lot_id))
+}
+
+fn seed_lot_adjustments_path(slug: &str, lot_id: &str) -> String {
+    format!("{}/adjustments", seed_lot_path(slug, lot_id))
+}
+
 fn seed_field_catalog_path(slug: &str) -> String {
     format!("{}/field-catalog", seed_base_path(slug))
 }
@@ -328,6 +503,10 @@ mod tests {
         assert_eq!(
             seed_manifest_import_task_path("tashan", "batch 1"),
             "/project/tashan/seed/intake-batches/batch%201/manifest-import-task"
+        );
+        assert_eq!(
+            seed_manifest_template_path("tashan", "batch 1"),
+            "/project/tashan/seed/intake-batches/batch%201/manifest-template"
         );
         assert_eq!(
             seed_intake_task_path("tashan", "batch 1"),
@@ -366,6 +545,42 @@ mod tests {
         assert_eq!(
             seed_stock_path("ta shan", "stock 1/a"),
             "/project/ta%20shan/seed/stocks/stock%201%2Fa"
+        );
+    }
+
+    #[test]
+    fn builds_seed_lot_paths() {
+        assert_eq!(
+            seed_lots_path("ta shan", Some("GM 1"), 10, 20),
+            "/project/ta%20shan/seed/lots?skip=10&limit=20&seed_type_code=GM+1"
+        );
+        assert_eq!(
+            seed_lot_path("tashan", "lot 1/a"),
+            "/project/tashan/seed/lots/lot%201%2Fa"
+        );
+        assert_eq!(
+            seed_lot_movements_path("tashan", "lot-1"),
+            "/project/tashan/seed/lots/lot-1/movements"
+        );
+        assert_eq!(
+            seed_lot_reservations_path("tashan", "lot-1"),
+            "/project/tashan/seed/lots/lot-1/reservations"
+        );
+        assert_eq!(
+            seed_reservation_release_path("tashan", "reservation/1"),
+            "/project/tashan/seed/reservations/reservation%2F1/release"
+        );
+        assert_eq!(
+            seed_lot_checkout_path("tashan", "lot-1"),
+            "/project/tashan/seed/lots/lot-1/checkout"
+        );
+        assert_eq!(
+            seed_lot_transfer_path("tashan", "lot-1"),
+            "/project/tashan/seed/lots/lot-1/transfer"
+        );
+        assert_eq!(
+            seed_lot_adjustments_path("tashan", "lot-1"),
+            "/project/tashan/seed/lots/lot-1/adjustments"
         );
     }
 
