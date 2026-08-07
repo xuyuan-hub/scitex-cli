@@ -1,6 +1,6 @@
 [package]
 name = "scitex-cli"
-version = "0.4.21"
+version = "0.4.22"
 edition = "2021"
 description = "CLI client for the Scientex order system (primer synthesis + sequencing), inventory, and lab management"
 

@@ -2,12 +2,12 @@
 //!
 //! These tests ensure CLI enum values and API paths stay aligned with the
 //! backend's OpenAPI specification. The fixture is a pinned snapshot of
-//! `http://8.136.56.203/api/v1/openapi.json` at `tests/fixtures/openapi.json`.
+//! `https://scientex.cn/api/v1/openapi.json` at `tests/fixtures/openapi.json`.
 //!
 //! When the backend changes its API, update the fixture by running:
 //!
 //! ```bash
-//! curl http://8.136.56.203/api/v1/openapi.json -o tests/fixtures/openapi.json
+//! curl https://scientex.cn/api/v1/openapi.json -o tests/fixtures/openapi.json
 //! ```
 //!
 //! Then run `cargo test` — if a CLI enum value or path no longer matches the
@@ -1012,7 +1012,7 @@ fn refresh_openapi_fixture() {
             "-sSf",
             "--connect-timeout",
             "10",
-            "http://8.136.56.203/api/v1/openapi.json",
+            "https://scientex.cn/api/v1/openapi.json",
         ])
         .output()
         .expect("failed to run curl; is curl installed?");

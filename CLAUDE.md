@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 **scitex-cli** — A Rust CLI client for the Scientex lab management system (primer synthesis + sequencing orders, inventory, lab administration).
 
-The system communicates with a FastAPI backend at `http://8.136.56.203/api/v1` using Feishu OAuth for authentication.
+The system communicates with a FastAPI backend at `https://scientex.cn/api/v1` using Feishu OAuth for authentication.
 
 ## Scientex Multi-Repository Boundary
 
@@ -125,7 +125,7 @@ src/
 
 ### API Base URL
 
-Default: `http://8.136.56.203/api/v1` — overrideable via `SCIENTEX_BASE_URL` env var.
+Default: `https://scientex.cn/api/v1` — overrideable via `SCIENTEX_BASE_URL` env var.
 
 ### Agent Skills
 
@@ -196,12 +196,12 @@ Other docs:
 
 ## OpenAPI Contract Tests
 
-`tests/openapi_contract.rs` checks that CLI enum values and API paths stay aligned with the backend's OpenAPI spec. The fixture `tests/fixtures/openapi.json` is a pinned snapshot of `http://8.136.56.203/api/v1/openapi.json`.
+`tests/openapi_contract.rs` checks that CLI enum values and API paths stay aligned with the backend's OpenAPI spec. The fixture `tests/fixtures/openapi.json` is a pinned snapshot of `https://scientex.cn/api/v1/openapi.json`.
 
 When the backend changes its API, refresh the fixture:
 
 ```bash
-curl http://8.136.56.203/api/v1/openapi.json -o tests/fixtures/openapi.json
+curl https://scientex.cn/api/v1/openapi.json -o tests/fixtures/openapi.json
 # or: cargo test --test openapi_contract refresh_openapi_fixture -- --ignored
 ```
 

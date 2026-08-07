@@ -6,7 +6,7 @@ use std::{
 
 use keyring::{Entry, Error as KeyringError};
 
-pub const DEFAULT_BASE_URL: &str = "http://8.136.56.203/api/v1";
+pub const DEFAULT_BASE_URL: &str = "https://scientex.cn/api/v1";
 const TOKEN_ENV_VAR: &str = "SCIENTEX_TOKEN";
 const BASE_URL_ENV_VAR: &str = "SCIENTEX_BASE_URL";
 const INSECURE_TOKEN_FILE_ENV_VAR: &str = "SCIENTEX_INSECURE_TOKEN_FILE";

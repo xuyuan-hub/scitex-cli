@@ -13,7 +13,7 @@ If you were invoked to help a user "place an order" or "check inventory" against
 
 ## What this project is
 
-**scitex-cli** — the official Rust CLI client for the Scientex lab management system (primer synthesis + sequencing orders, inventory, lab administration, projects, tasks). It talks to a FastAPI backend at `http://8.136.56.203/api/v1` over Feishu OAuth. Full detail: [README.md](README.md) (user-facing) and [CLAUDE.md](CLAUDE.md) (architecture).
+**scitex-cli** — the official Rust CLI client for the Scientex lab management system (primer synthesis + sequencing orders, inventory, lab administration, projects, tasks). It talks to a FastAPI backend at `https://scientex.cn/api/v1` over Feishu OAuth. Full detail: [README.md](README.md) (user-facing) and [CLAUDE.md](CLAUDE.md) (architecture).
 
 ## Scientex Multi-Repository Boundary
 
