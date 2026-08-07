@@ -633,24 +633,24 @@ mod tests {
     #[test]
     fn accepts_download_url_on_same_host() {
         let url = checked_download_url(
-            "http://8.136.56.203/api/v1",
-            "http://8.136.56.203/static/result.txt",
+            "https://scientex.cn/api/v1",
+            "https://scientex.cn/static/result.txt",
         )
         .expect("same host should be allowed");
-        assert_eq!(url.as_str(), "http://8.136.56.203/static/result.txt");
+        assert_eq!(url.as_str(), "https://scientex.cn/static/result.txt");
     }
 
     #[test]
     fn accepts_relative_download_url() {
-        let url = checked_download_url("http://8.136.56.203/api/v1", "/static/result.txt")
+        let url = checked_download_url("https://scientex.cn/api/v1", "/static/result.txt")
             .expect("relative URL should be allowed");
-        assert_eq!(url.as_str(), "http://8.136.56.203/static/result.txt");
+        assert_eq!(url.as_str(), "https://scientex.cn/static/result.txt");
     }
 
     #[test]
     fn rejects_download_url_on_external_host() {
         let err = checked_download_url(
-            "http://8.136.56.203/api/v1",
+            "https://scientex.cn/api/v1",
             "http://example.com/static/result.txt",
         )
         .expect_err("external host should be rejected");

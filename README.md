@@ -254,7 +254,7 @@ Please fully understand all usage risks. By using this tool, you are deemed to v
 
 | Setting | Default | Override |
 |---------|---------|----------|
-| API Base URL | `http://8.136.56.203/api/v1` | `SCIENTEX_BASE_URL` env var |
+| API Base URL | `https://scientex.cn/api/v1` | `SCIENTEX_BASE_URL` env var |
 | Token | OS keychain; container-local file fallback in Docker/K8s | `SCIENTEX_TOKEN` env var; `SCIENTEX_INSECURE_TOKEN_FILE=1` for explicit host plaintext fallback |
 
 ## Architecture
@@ -565,7 +565,7 @@ scitex inventory stats -f json
 
 | 配置项 | 默认值 | 环境变量覆盖 |
 |--------|--------|-------------|
-| API 地址 | `http://8.136.56.203/api/v1` | `SCIENTEX_BASE_URL` |
+| API 地址 | `https://scientex.cn/api/v1` | `SCIENTEX_BASE_URL` |
 | Token | OS 密钥链；Docker/K8s 容器内本地文件 fallback | `SCIENTEX_TOKEN`；显式 `SCIENTEX_INSECURE_TOKEN_FILE=1` 宿主机明文回退 |
 
 ## 架构

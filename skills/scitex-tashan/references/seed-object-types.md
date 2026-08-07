@@ -105,7 +105,7 @@ Run the deterministic preflight before requesting confirmation. It does not cont
 
 ```bash
 python3 <SKILL_ROOT>/scripts/validate_seed_type_config.py <PATH_TO_REVIEWED_JSON> \
-  --openapi "${SCIENTEX_BASE_URL:-http://8.136.56.203/api/v1}/openapi.json" --json
+  --openapi "${SCIENTEX_BASE_URL:-https://scientex.cn/api/v1}/openapi.json" --json
 ```
 
 Review this checklist with the leader before writing:
